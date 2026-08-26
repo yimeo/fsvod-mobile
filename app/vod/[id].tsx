@@ -6,7 +6,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { VodPoster } from "@/components/vod-poster";
 import { fetchVodDetail, type MacCmsVodDetail } from "@/lib/maccms";
-import { downloadEpisodeOffline, getOfflineDownloads, isOfflineDownloadSupported, type OfflineDownload, type OfflineDownloadProgress } from "@/lib/offline-downloads";
+import { getOfflineDownloads, isOfflineDownloadSupported, type OfflineDownload } from "@/lib/offline-downloads";
+import { useDownloadQueue } from "@/lib/download-queue-context";
 import { cacheVodDetail, getCachedVodDetail, saveWatchHistory } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
@@ -15,13 +16,12 @@ export default function VodDetailScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const { endpoint } = useVodSource();
+  const { enqueue, retry, resumeTask, tasks, isWifi, settings } = useDownloadQueue();
   const [detail, setDetail] = useState<MacCmsVodDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [downloads, setDownloads] = useState<Record<string, OfflineDownload>>({});
-  const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<OfflineDownloadProgress | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,19 +69,17 @@ export default function VodDetailScreen() {
   };
 
   const download = async (episodeName: string, url: string) => {
-    if (!detail || !source || downloadingUrl || downloads[url]) return;
-    setDownloadingUrl(url);
-    setDownloadProgress(null);
+    if (!detail || !source || downloads[url]) return;
     setDownloadError(null);
-    try {
-      const entry = await downloadEpisodeOffline({ vodId: detail.id, vodName: detail.name, sourceName: source.name, episodeName, remoteUrl: url }, setDownloadProgress);
-      setDownloads((current) => ({ ...current, [url]: entry }));
-    } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : "下载失败，请更换线路后重试");
-    } finally {
-      setDownloadingUrl(null);
-      setDownloadProgress(null);
-    }
+    const count = await enqueue([{ vodId: detail.id, vodName: detail.name, sourceName: source.name, episodeName, remoteUrl: url }]);
+    if (count === 0) setDownloadError("该剧集已在下载队列中或当前线路不支持离线缓存");
+  };
+
+  const downloadSource = async () => {
+    if (!detail || !source) return;
+    setDownloadError(null);
+    const count = await enqueue(source.episodes.filter((episode) => !downloads[episode.url] && isOfflineDownloadSupported(episode.url)).map((episode) => ({ vodId: detail.id, vodName: detail.name, sourceName: source.name, episodeName: episode.name, remoteUrl: episode.url })));
+    if (count === 0) setDownloadError("本线路没有可加入的新下载任务");
   };
 
   if (isLoading && !detail) return <View style={styles.page}><ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#F5B64B" size="large" /></ScreenContainer><GlobalBottomNavigation /></View>;
@@ -97,7 +95,7 @@ export default function VodDetailScreen() {
         {(detail.actor || detail.director) ? <View style={styles.creditBox}>{detail.director ? <Text style={styles.credit}>导演：{detail.director}</Text> : null}{detail.actor ? <Text style={styles.credit}>主演：{detail.actor}</Text> : null}</View> : null}
         <View style={styles.titleRow}><Text style={styles.sectionTitle}>播放线路</Text><Text style={styles.cacheLabel}>已缓存到本机</Text></View>
         <FlatList horizontal data={detail.sources} keyExtractor={(item) => item.name} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourceList} renderItem={({ item, index }) => <Pressable onPress={() => setSourceIndex(index)} style={({ pressed }) => [styles.sourceChip, sourceIndex === index && styles.sourceChipActive, pressed && styles.pressed]}><Text style={[styles.sourceText, sourceIndex === index && styles.sourceTextActive]}>{item.name}</Text></Pressable>} />
-        {source ? <><View style={styles.episodeHeader}><Text style={styles.episodeLabel}>{source.name} · {source.episodes.length} 集</Text><Text style={styles.episodeHint}>点剧集播放；下载后可离线观看</Text></View>{downloadError ? <Text style={styles.downloadError}>{downloadError}</Text> : null}<FlatList data={source.episodes} key={`episodes-${source.name}`} numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.name}-${index}`} contentContainerStyle={styles.episodeList} columnWrapperStyle={source.episodes.length ? styles.episodeRow : undefined} renderItem={({ item }) => { const cached = downloads[item.url]; const downloading = downloadingUrl === item.url; const supported = isOfflineDownloadSupported(item.url); const progressText = downloading ? (downloadProgress?.fraction !== null && downloadProgress?.fraction !== undefined ? `${Math.round(downloadProgress.fraction * 100)}%` : "下载中") : cached ? "已缓存" : supported ? "下载" : "仅播放"; return <View style={styles.episodeCell}><Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.episode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable><Pressable disabled={!supported || downloading || Boolean(cached)} onPress={() => void download(item.name, item.url)} style={({ pressed }) => [styles.downloadButton, cached && styles.downloadCached, (!supported || downloading) && !cached && styles.downloadDisabled, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.downloadText, cached && styles.downloadCachedText]}>{progressText}</Text></Pressable></View>; }} /></> : <Text style={styles.noSource}>数据源未提供可用播放线路。</Text>}
+        {source ? <><View style={styles.episodeHeader}><View><Text style={styles.episodeLabel}>{source.name} · {source.episodes.length} 集</Text><Text style={styles.episodeHint}>{settings?.wifiOnly ? (isWifi ? "Wi‑Fi 下将自动继续下载" : "等待 Wi‑Fi 后自动继续下载") : "前台打开时自动继续下载"}</Text></View><Pressable onPress={() => void downloadSource()} style={({ pressed }) => [styles.batchButton, pressed && styles.pressed]}><Text style={styles.batchText}>下载本线路</Text></Pressable></View>{downloadError ? <Text style={styles.downloadError}>{downloadError}</Text> : null}<FlatList data={source.episodes} key={`episodes-${source.name}`} numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.name}-${index}`} contentContainerStyle={styles.episodeList} columnWrapperStyle={source.episodes.length ? styles.episodeRow : undefined} renderItem={({ item }) => { const cached = downloads[item.url]; const task = tasks.find((entry) => entry.remoteUrl === item.url); const supported = isOfflineDownloadSupported(item.url); const progressText = cached ? "已缓存" : task?.status === "downloading" ? (task.progress?.fraction !== null && task.progress?.fraction !== undefined ? `${Math.round(task.progress.fraction * 100)}%` : "下载中") : task?.status === "queued" ? "队列中" : task?.status === "paused" ? "已暂停" : task?.status === "failed" ? "重试" : supported ? "下载" : "仅播放"; const action = task?.status === "failed" ? () => retry(task.id) : task?.status === "paused" ? () => resumeTask(task.id) : () => download(item.name, item.url); return <View style={styles.episodeCell}><Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.episode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable><Pressable disabled={!supported || task?.status === "downloading" || task?.status === "queued" || Boolean(cached)} onPress={() => void action()} style={({ pressed }) => [styles.downloadButton, cached && styles.downloadCached, task?.status === "failed" && styles.downloadFailed, (!supported || task?.status === "downloading" || task?.status === "queued") && !cached && styles.downloadDisabled, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.downloadText, cached && styles.downloadCachedText]}>{progressText}</Text></Pressable></View>; }} /></> : <Text style={styles.noSource}>数据源未提供可用播放线路。</Text>}
       </ScrollView>
     </ScreenContainer>
     <GlobalBottomNavigation />
@@ -127,9 +125,11 @@ const styles = StyleSheet.create({
   sourceChipActive: { backgroundColor: "#F5B64B", borderColor: "#F5B64B" },
   sourceText: { color: "#C4CEDF", fontSize: 13, fontWeight: "700" },
   sourceTextActive: { color: "#11192B" },
-  episodeHeader: { marginTop: 18, marginBottom: 10 },
+  episodeHeader: { marginTop: 18, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   episodeLabel: { color: "#AAB6C8", fontSize: 13, lineHeight: 19, fontWeight: "700" },
   episodeHint: { color: "#75839B", fontSize: 11, lineHeight: 16, marginTop: 2 },
+  batchButton: { height: 32, borderRadius: 9, paddingHorizontal: 10, justifyContent: "center", backgroundColor: "#F5B64B" },
+  batchText: { color: "#11192B", fontSize: 11, lineHeight: 16, fontWeight: "800" },
   downloadError: { color: "#F5BF77", fontSize: 11, lineHeight: 17, backgroundColor: "#30252C", borderRadius: 8, padding: 8, marginBottom: 10 },
   episodeList: { gap: 9 },
   episodeRow: { gap: 8, marginBottom: 9 },
@@ -140,6 +140,7 @@ const styles = StyleSheet.create({
   downloadText: { color: "#AAD2FC", fontSize: 10, lineHeight: 14, fontWeight: "800" },
   downloadCached: { backgroundColor: "#1F523F", borderColor: "#397861" },
   downloadCachedText: { color: "#A9E2BE" },
+  downloadFailed: { backgroundColor: "#553040", borderColor: "#96576C" },
   downloadDisabled: { opacity: 0.52 },
   noSource: { color: "#9CA7BE", fontSize: 13, lineHeight: 20, paddingVertical: 18 },
   errorTitle: { color: "#F4F6FA", fontSize: 18, lineHeight: 25, fontWeight: "800", textAlign: "center" },

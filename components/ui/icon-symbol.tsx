@@ -19,6 +19,7 @@ const MAPPING = {
   "magnifyingglass": "search",
   "gearshape.fill": "settings",
   "play.rectangle.fill": "play-circle-filled",
+  "arrow.down.circle.fill": "download",
   "clock.arrow.circlepath": "history",
   "chevron.down": "keyboard-arrow-down",
   "arrow.clockwise": "refresh",

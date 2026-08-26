@@ -2,16 +2,21 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
+import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { clearLocalVodData, getLocalCacheSummary } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
+import { useDownloadQueue } from "@/lib/download-queue-context";
+import { clearQueueTasks, formatStorageLimit } from "@/lib/download-queue";
 
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
 export default function SettingsScreen() {
   const { endpoint, categories, configureSource, sourceError } = useVodSource();
+  const { tasks, settings, isWifi } = useDownloadQueue();
+  const router = useRouter();
   const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,6 +63,7 @@ export default function SettingsScreen() {
     try {
       await clearLocalVodData();
       await clearOfflineDownloads();
+      await clearQueueTasks();
       await Image.clearMemoryCache();
       await Image.clearDiskCache();
       if (Platform.OS === "android") await clearVideoCacheAsync();
@@ -97,6 +103,11 @@ export default function SettingsScreen() {
           </View>
           <Pressable onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>清理本地缓存</Text></Pressable>
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>下载中心</Text>
+          <Text style={styles.meta}>{isWifi ? "当前已连接 Wi‑Fi" : "当前未连接 Wi‑Fi"} · {tasks.filter((task) => task.status !== "completed").length} 个待处理任务 · 上限 {settings ? formatStorageLimit(settings.storageLimitBytes) : "加载中"}</Text>
+          <Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>管理下载队列</Text></Pressable>
         </View>
         <View style={styles.note}><Text style={styles.noteTitle}>播放说明</Text><Text style={styles.noteText}>支持直接播放的常见 MP4、M3U8 等地址会进入原生播放器。其他网页型地址会保留清晰提示，以便你在浏览器中打开。</Text></View>
       </ScrollView>
