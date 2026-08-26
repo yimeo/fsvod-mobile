@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -84,7 +84,7 @@ export default function HomeScreen() {
     return (
       <ScreenContainer className="px-6 pt-8" containerClassName="bg-background">
         <View style={styles.emptyHero}>
-          <View style={styles.brandMark}><Text style={styles.brandMarkText}>飞</Text></View>
+          <Image source={require("@/assets/images/icon.png")} style={styles.brandMark} />
           <Text style={styles.emptyTitle}>接入你的影视数据源</Text>
           <Text style={styles.emptyText}>填入 MACCMS 站点域名后，飞鸿影院会自动识别数据接口和影视分类。</Text>
           <Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
@@ -98,7 +98,7 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <View>
       <View style={styles.header}>
-        <View><Text style={styles.eyebrow}>FEIHONG CINEMA</Text><Text style={styles.heading}>发现好电影</Text></View>
+        <View><Text style={styles.eyebrow}>飞鸿影院</Text><Text style={styles.heading}>发现好电影</Text></View>
         <Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.buttonPressed]}>
           <Text style={styles.searchIcon}>⌕</Text>
         </Pressable>
@@ -182,8 +182,7 @@ const styles = StyleSheet.create({
   noResultsTitle: { color: "#E7EAF0", fontWeight: "700", fontSize: 16, lineHeight: 23 },
   noResultsText: { color: "#9CA7BE", textAlign: "center", marginTop: 7, fontSize: 13, lineHeight: 20 },
   emptyHero: { flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 70 },
-  brandMark: { height: 80, width: 80, borderRadius: 27, backgroundColor: "#F5B64B", alignItems: "center", justifyContent: "center", marginBottom: 26, shadowColor: "#F5B64B", shadowOpacity: 0.25, shadowRadius: 20 },
-  brandMarkText: { color: "#10182B", fontSize: 38, fontWeight: "900", lineHeight: 46 },
+  brandMark: { height: 80, width: 80, borderRadius: 24, marginBottom: 26, shadowColor: "#F5B64B", shadowOpacity: 0.25, shadowRadius: 20 },
   emptyTitle: { color: "#F6F7FB", fontWeight: "800", fontSize: 23, lineHeight: 31, textAlign: "center" },
   emptyText: { color: "#9CA7BE", fontSize: 14, lineHeight: 22, textAlign: "center", marginTop: 10, maxWidth: 290 },
   primaryButton: { marginTop: 25, backgroundColor: "#F5B64B", paddingHorizontal: 20, height: 46, justifyContent: "center", borderRadius: 13 },
