@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
-import { fetchVodPage, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
+import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
 import { useVodSource } from "@/lib/vod-context";
 
 const ALL_CATEGORY: MacCmsCategory = { id: "all", name: "全部", parentId: null, children: [] };
@@ -25,6 +25,10 @@ export default function HomeScreen() {
   const rootCategories = useMemo(() => [ALL_CATEGORY, ...categories], [categories]);
   const selectedRoot = useMemo(() => rootCategories.find((category) => category.id === activeRootId) ?? ALL_CATEGORY, [activeRootId, rootCategories]);
   const childCategories = useMemo(() => selectedRoot.children, [selectedRoot]);
+  const childCategoryChoices = useMemo(
+    () => selectedRoot.id === "all" ? [] : [{ id: selectedRoot.id, name: "全部内容", parentId: null, children: [] }, ...childCategories],
+    [childCategories, selectedRoot.id],
+  );
 
   useEffect(() => {
     const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
@@ -41,7 +45,10 @@ export default function HomeScreen() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const result = await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId });
+      const shouldAggregateChildren = activeRootId !== "all" && activeTypeId === selectedRoot.id && selectedRoot.children.length > 0;
+      const result = shouldAggregateChildren
+        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id }))))
+        : await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId });
       setItems((current) => append ? [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))] : result.items);
       setPage(result.page);
       setPageCount(result.pageCount);
@@ -50,7 +57,7 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTypeId, endpoint]);
+  }, [activeRootId, activeTypeId, endpoint, selectedRoot]);
 
   useEffect(() => {
     if (endpoint) void loadPage(1);
@@ -104,17 +111,17 @@ export default function HomeScreen() {
         contentContainerStyle={styles.categoryList}
         renderItem={({ item }) => <CategoryChip label={item.name} active={activeRootId === item.id} onPress={() => chooseRoot(item.id)} />}
       />
-      {childCategories.length > 0 ? (
+      {childCategoryChoices.length > 0 ? (
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={childCategories}
+          data={childCategoryChoices}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.subcategoryList}
           renderItem={({ item }) => <CategoryChip label={item.name} compact active={activeTypeId === item.id} onPress={() => chooseChild(item.id)} />}
         />
       ) : null}
-      <View style={styles.sectionRow}><Text style={styles.sectionTitle}>{activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name}</Text><Text style={styles.sectionMeta}>实时数据</Text></View>
+      <View style={styles.sectionRow}><Text style={styles.sectionTitle}>{activeTypeId === selectedRoot.id && selectedRoot.children.length > 0 ? `${selectedRoot.name} · 全部内容` : activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name}</Text><Text style={styles.sectionMeta}>实时数据</Text></View>
       {sourceError ? <Text style={styles.warning}>{sourceError}</Text> : null}
       {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
     </View>

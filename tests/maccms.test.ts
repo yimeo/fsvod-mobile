@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCategoryTree, parseMacCmsPage, parsePlaySources } from "../lib/maccms";
+import { buildCategoryTree, mergeMacCmsPages, parseMacCmsPage, parsePlaySources } from "../lib/maccms";
 
 describe("MACCMS 数据适配", () => {
   const endpoint = "https://video.example.com/api.php/provide/vod/";
@@ -62,5 +62,15 @@ describe("MACCMS 数据适配", () => {
     expect(sources).toHaveLength(2);
     expect(sources[0].episodes).toHaveLength(2);
     expect(sources[1].episodes[0].url).toBe("https://cdn.example.com/movie.mp4");
+  });
+
+  it("合并一级分类与二级分类的分页内容并去重", () => {
+    const first = parseMacCmsPage({ code: 1, page: 1, pagecount: 2, total: 2, list: [{ vod_id: 1, vod_name: "一级内容", vod_time: "2026-01-01" }, { vod_id: 2, vod_name: "共享内容", vod_time: "2026-01-02" }] }, endpoint);
+    const second = parseMacCmsPage({ code: 1, page: 1, pagecount: 3, total: 2, list: [{ vod_id: 2, vod_name: "共享内容", vod_time: "2026-01-02" }, { vod_id: 3, vod_name: "子类内容", vod_time: "2026-01-03" }] }, endpoint);
+    const combined = mergeMacCmsPages([first, second]);
+
+    expect(combined.total).toBe(4);
+    expect(combined.pageCount).toBe(3);
+    expect(combined.items.map((item) => item.id)).toEqual(["3", "2", "1"]);
   });
 });

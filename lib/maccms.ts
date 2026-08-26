@@ -261,6 +261,19 @@ export async function fetchVodPage(
   return parseMacCmsPage(payload, endpoint.apiUrl);
 }
 
+export function mergeMacCmsPages(pages: MacCmsPage[]): MacCmsPage {
+  if (pages.length === 0) return { items: [], page: 1, pageCount: 1, total: 0, raw: [] };
+  const uniqueItems = new Map<string, MacCmsVod>();
+  pages.forEach((page) => page.items.forEach((item) => uniqueItems.set(item.id, item)));
+  return {
+    items: [...uniqueItems.values()].sort((left, right) => right.updateTime.localeCompare(left.updateTime)),
+    page: pages[0].page,
+    pageCount: Math.max(...pages.map((page) => page.pageCount)),
+    total: pages.reduce((sum, page) => sum + page.total, 0),
+    raw: pages.map((page) => page.raw),
+  };
+}
+
 function splitEpisodes(value: string): MacCmsEpisode[] {
   return value
     .split("#")
