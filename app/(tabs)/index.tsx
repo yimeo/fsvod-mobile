@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
@@ -11,6 +11,7 @@ const ALL_CATEGORY: MacCmsCategory = { id: "all", name: "全部", parentId: null
 
 export default function HomeScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ typeId?: string }>();
   const { endpoint, categories, isBooting, sourceError, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("all");
   const [activeTypeId, setActiveTypeId] = useState<string | undefined>();
@@ -24,6 +25,13 @@ export default function HomeScreen() {
   const rootCategories = useMemo(() => [ALL_CATEGORY, ...categories], [categories]);
   const selectedRoot = useMemo(() => rootCategories.find((category) => category.id === activeRootId) ?? ALL_CATEGORY, [activeRootId, rootCategories]);
   const childCategories = useMemo(() => selectedRoot.children, [selectedRoot]);
+
+  useEffect(() => {
+    const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
+    if (!targetTypeId || !categories.some((category) => category.id === targetTypeId)) return;
+    setActiveRootId(targetTypeId);
+    setActiveTypeId(targetTypeId);
+  }, [categories, routeParams.typeId]);
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint) return;
