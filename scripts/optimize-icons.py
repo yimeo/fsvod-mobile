@@ -1,9 +1,11 @@
 from pathlib import Path
 
+from pathlib import Path
+
 from PIL import Image
 
 
-SOURCE = Path("/home/ubuntu/webdev-static-assets/fsvod-icon.png")
+SOURCE = Path("/home/ubuntu/webdev-static-assets/fsvod-icon-refined.png")
 TARGETS = [
     Path("/home/ubuntu/fsvod-mobile/assets/images/icon.png"),
     Path("/home/ubuntu/fsvod-mobile/assets/images/splash-icon.png"),

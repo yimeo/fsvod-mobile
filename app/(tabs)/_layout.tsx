@@ -26,6 +26,13 @@ export default function TabLayout() {
           borderTopColor: colors.border,
           borderTopWidth: 0.5,
         },
+        tabBarItemStyle: {
+          paddingTop: 1,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "700",
+        },
       }}
     >
       <Tabs.Screen

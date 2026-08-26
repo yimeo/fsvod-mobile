@@ -32,7 +32,7 @@ const env = {
   appSlug: "fsvod-mobile",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://8081-iqwonwej9r8kim06ykrg8-4113f88b.us3.manus.computer/manus-storage/fsvod-icon_e238c5d4.png",
+  logoUrl: "https://8081-iqwonwej9r8kim06ykrg8-4113f88b.us3.manus.computer/manus-storage/fsvod-icon-refined_002017fa.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -56,7 +56,7 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
+      backgroundColor: "#0B1020",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -105,7 +105,7 @@ const config: ExpoConfig = {
         image: "./assets/images/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#0B1020",
         dark: {
           backgroundColor: "#000000",
         },
