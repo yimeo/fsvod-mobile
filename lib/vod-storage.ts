@@ -7,6 +7,7 @@ const SOURCE_KEY = `${PREFIX}source`;
 const DETAIL_PREFIX = `${PREFIX}detail:`;
 const SEARCH_KEY = `${PREFIX}searches`;
 const HISTORY_KEY = `${PREFIX}history`;
+const CATEGORY_ORDER_KEY = `${PREFIX}category-order`;
 
 export interface WatchHistoryEntry {
   id: string;
@@ -54,6 +55,14 @@ export async function rememberSearch(keyword: string): Promise<string[]> {
 
 export function getSearches(): Promise<string[]> {
   return getJson<string[]>(SEARCH_KEY, []);
+}
+
+export function getCategoryOrder(): Promise<string[]> {
+  return getJson<string[]>(CATEGORY_ORDER_KEY, []);
+}
+
+export async function saveCategoryOrder(order: string[]): Promise<void> {
+  await AsyncStorage.setItem(CATEGORY_ORDER_KEY, JSON.stringify(order));
 }
 
 export async function saveWatchHistory(entry: WatchHistoryEntry): Promise<WatchHistoryEntry[]> {

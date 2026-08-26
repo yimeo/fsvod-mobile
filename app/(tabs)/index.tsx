@@ -28,8 +28,11 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
-    if (!targetTypeId || !categories.some((category) => category.id === targetTypeId)) return;
-    setActiveRootId(targetTypeId);
+    if (!targetTypeId) return;
+    const root = categories.find((category) => category.id === targetTypeId)
+      ?? categories.find((category) => category.children.some((child) => child.id === targetTypeId));
+    if (!root) return;
+    setActiveRootId(root.id);
     setActiveTypeId(targetTypeId);
   }, [categories, routeParams.typeId]);
 
