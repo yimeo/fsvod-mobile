@@ -6,6 +6,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { VodPoster } from "@/components/vod-poster";
 import { fetchVodDetail, type MacCmsVodDetail } from "@/lib/maccms";
+import { downloadEpisodeOffline, getOfflineDownloads, isOfflineDownloadSupported, type OfflineDownload, type OfflineDownloadProgress } from "@/lib/offline-downloads";
 import { cacheVodDetail, getCachedVodDetail, saveWatchHistory } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
@@ -18,6 +19,10 @@ export default function VodDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sourceIndex, setSourceIndex] = useState(0);
+  const [downloads, setDownloads] = useState<Record<string, OfflineDownload>>({});
+  const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<OfflineDownloadProgress | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -46,12 +51,37 @@ export default function VodDetailScreen() {
     void load();
   }, [endpoint, id]);
 
+  useEffect(() => {
+    const loadDownloads = async () => {
+      const saved = await getOfflineDownloads();
+      setDownloads(Object.fromEntries(saved.map((item) => [item.remoteUrl, item])));
+    };
+    void loadDownloads();
+  }, [id]);
+
   const source = useMemo(() => detail?.sources[sourceIndex] ?? null, [detail, sourceIndex]);
 
   const play = async (episodeName: string, url: string) => {
     if (!detail || !source) return;
     await saveWatchHistory({ id: detail.id, name: detail.name, posterUrl: detail.posterUrl, sourceName: source.name, episodeName, watchedAt: new Date().toISOString() });
-    router.push({ pathname: "/player", params: { url, title: detail.name, episode: episodeName, source: source.name } } as never);
+    const offline = downloads[url];
+    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, title: detail.name, episode: episodeName, source: source.name, offline: offline ? "1" : "0" } } as never);
+  };
+
+  const download = async (episodeName: string, url: string) => {
+    if (!detail || !source || downloadingUrl || downloads[url]) return;
+    setDownloadingUrl(url);
+    setDownloadProgress(null);
+    setDownloadError(null);
+    try {
+      const entry = await downloadEpisodeOffline({ vodId: detail.id, vodName: detail.name, sourceName: source.name, episodeName, remoteUrl: url }, setDownloadProgress);
+      setDownloads((current) => ({ ...current, [url]: entry }));
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "下载失败，请更换线路后重试");
+    } finally {
+      setDownloadingUrl(null);
+      setDownloadProgress(null);
+    }
   };
 
   if (isLoading && !detail) return <View style={styles.page}><ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#F5B64B" size="large" /></ScreenContainer><GlobalBottomNavigation /></View>;
@@ -67,7 +97,7 @@ export default function VodDetailScreen() {
         {(detail.actor || detail.director) ? <View style={styles.creditBox}>{detail.director ? <Text style={styles.credit}>导演：{detail.director}</Text> : null}{detail.actor ? <Text style={styles.credit}>主演：{detail.actor}</Text> : null}</View> : null}
         <View style={styles.titleRow}><Text style={styles.sectionTitle}>播放线路</Text><Text style={styles.cacheLabel}>已缓存到本机</Text></View>
         <FlatList horizontal data={detail.sources} keyExtractor={(item) => item.name} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourceList} renderItem={({ item, index }) => <Pressable onPress={() => setSourceIndex(index)} style={({ pressed }) => [styles.sourceChip, sourceIndex === index && styles.sourceChipActive, pressed && styles.pressed]}><Text style={[styles.sourceText, sourceIndex === index && styles.sourceTextActive]}>{item.name}</Text></Pressable>} />
-        {source ? <><Text style={styles.episodeLabel}>{source.name} · {source.episodes.length} 集</Text><FlatList horizontal data={source.episodes} keyExtractor={(item, index) => `${item.name}-${index}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.episodeList} renderItem={({ item }) => <Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.episode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable>} /></> : <Text style={styles.noSource}>数据源未提供可用播放线路。</Text>}
+        {source ? <><View style={styles.episodeHeader}><Text style={styles.episodeLabel}>{source.name} · {source.episodes.length} 集</Text><Text style={styles.episodeHint}>点剧集播放；下载后可离线观看</Text></View>{downloadError ? <Text style={styles.downloadError}>{downloadError}</Text> : null}<FlatList data={source.episodes} key={`episodes-${source.name}`} numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.name}-${index}`} contentContainerStyle={styles.episodeList} columnWrapperStyle={source.episodes.length ? styles.episodeRow : undefined} renderItem={({ item }) => { const cached = downloads[item.url]; const downloading = downloadingUrl === item.url; const supported = isOfflineDownloadSupported(item.url); const progressText = downloading ? (downloadProgress?.fraction !== null && downloadProgress?.fraction !== undefined ? `${Math.round(downloadProgress.fraction * 100)}%` : "下载中") : cached ? "已缓存" : supported ? "下载" : "仅播放"; return <View style={styles.episodeCell}><Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.episode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable><Pressable disabled={!supported || downloading || Boolean(cached)} onPress={() => void download(item.name, item.url)} style={({ pressed }) => [styles.downloadButton, cached && styles.downloadCached, (!supported || downloading) && !cached && styles.downloadDisabled, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.downloadText, cached && styles.downloadCachedText]}>{progressText}</Text></Pressable></View>; }} /></> : <Text style={styles.noSource}>数据源未提供可用播放线路。</Text>}
       </ScrollView>
     </ScreenContainer>
     <GlobalBottomNavigation />
@@ -97,10 +127,20 @@ const styles = StyleSheet.create({
   sourceChipActive: { backgroundColor: "#F5B64B", borderColor: "#F5B64B" },
   sourceText: { color: "#C4CEDF", fontSize: 13, fontWeight: "700" },
   sourceTextActive: { color: "#11192B" },
-  episodeLabel: { color: "#AAB6C8", fontSize: 13, lineHeight: 19, fontWeight: "700", marginTop: 18, marginBottom: 10 },
-  episodeList: { gap: 9, paddingRight: 18 },
-  episode: { minWidth: 82, maxWidth: 130, height: 40, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#1A2945", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#314566" },
+  episodeHeader: { marginTop: 18, marginBottom: 10 },
+  episodeLabel: { color: "#AAB6C8", fontSize: 13, lineHeight: 19, fontWeight: "700" },
+  episodeHint: { color: "#75839B", fontSize: 11, lineHeight: 16, marginTop: 2 },
+  downloadError: { color: "#F5BF77", fontSize: 11, lineHeight: 17, backgroundColor: "#30252C", borderRadius: 8, padding: 8, marginBottom: 10 },
+  episodeList: { gap: 9 },
+  episodeRow: { gap: 8, marginBottom: 9 },
+  episodeCell: { flex: 1, minWidth: 0 },
+  episode: { height: 38, paddingHorizontal: 6, borderTopLeftRadius: 9, borderTopRightRadius: 9, backgroundColor: "#1A2945", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#314566" },
   episodeText: { color: "#D8E2F0", fontSize: 12, lineHeight: 17, fontWeight: "700" },
+  downloadButton: { height: 24, borderBottomLeftRadius: 9, borderBottomRightRadius: 9, backgroundColor: "#203858", justifyContent: "center", alignItems: "center", borderWidth: 1, borderTopWidth: 0, borderColor: "#314566" },
+  downloadText: { color: "#AAD2FC", fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  downloadCached: { backgroundColor: "#1F523F", borderColor: "#397861" },
+  downloadCachedText: { color: "#A9E2BE" },
+  downloadDisabled: { opacity: 0.52 },
   noSource: { color: "#9CA7BE", fontSize: 13, lineHeight: 20, paddingVertical: 18 },
   errorTitle: { color: "#F4F6FA", fontSize: 18, lineHeight: 25, fontWeight: "800", textAlign: "center" },
   errorText: { color: "#AAB7CA", fontSize: 13, lineHeight: 20, textAlign: "center", marginTop: 8 },

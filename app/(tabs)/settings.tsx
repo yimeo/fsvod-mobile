@@ -5,21 +5,23 @@ import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { clearLocalVodData, getLocalCacheSummary } from "@/lib/vod-storage";
+import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 
-interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null }
+interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
 export default function SettingsScreen() {
   const { endpoint, categories, configureSource, sourceError } = useVodSource();
   const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null });
+  const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
 
   const loadCacheSummary = useCallback(async () => {
     const local = await getLocalCacheSummary();
+    const offline = await getOfflineSummary();
     const videoBytes = Platform.OS === "android" ? getCurrentVideoCacheSize() : null;
-    setCache({ ...local, videoBytes });
+    setCache({ ...local, videoBytes, offlineCount: offline.count, offlineBytes: offline.sizeBytes });
   }, []);
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function SettingsScreen() {
   const runClearCaches = async () => {
     try {
       await clearLocalVodData();
+      await clearOfflineDownloads();
       await Image.clearMemoryCache();
       await Image.clearDiskCache();
       if (Platform.OS === "android") await clearVideoCacheAsync();
@@ -90,9 +93,10 @@ export default function SettingsScreen() {
             <CacheItem label="搜索记录" value={String(cache.searches)} />
             <CacheItem label="观看记录" value={String(cache.history)} />
             <CacheItem label="视频缓存" value={cache.videoBytes === null ? "—" : formatBytes(cache.videoBytes)} />
+            <CacheItem label="离线剧集" value={`${cache.offlineCount} · ${formatBytes(cache.offlineBytes)}`} />
           </View>
           <Pressable onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>清理本地缓存</Text></Pressable>
-          <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。Android 播放器可按系统可用空间管理媒体缓存。</Text>
+          <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
         </View>
         <View style={styles.note}><Text style={styles.noteTitle}>播放说明</Text><Text style={styles.noteText}>支持直接播放的常见 MP4、M3U8 等地址会进入原生播放器。其他网页型地址会保留清晰提示，以便你在浏览器中打开。</Text></View>
       </ScrollView>

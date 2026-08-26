@@ -8,11 +8,12 @@ import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { isDirectVideoUrl } from "@/lib/maccms";
 
 export default function PlayerScreen() {
-  const params = useLocalSearchParams<{ url: string; title?: string; episode?: string; source?: string }>();
+  const params = useLocalSearchParams<{ url: string; title?: string; episode?: string; source?: string; offline?: string }>();
   const router = useRouter();
   const url = Array.isArray(params.url) ? params.url[0] : params.url;
   const title = Array.isArray(params.title) ? params.title[0] : (params.title ?? "影片播放");
   const episode = Array.isArray(params.episode) ? params.episode[0] : (params.episode ?? "");
+  const offline = (Array.isArray(params.offline) ? params.offline[0] : params.offline) === "1";
   const directPlayable = Boolean(url && isDirectVideoUrl(url));
   const player = useVideoPlayer(directPlayable ? { uri: url, useCaching: Platform.OS === "android" } : null, (instance) => { instance.play(); });
 
@@ -30,7 +31,7 @@ export default function PlayerScreen() {
     <View style={styles.page}>
     <ScreenContainer containerClassName="bg-background" edges={["top", "bottom", "left", "right"]}>
       <View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹ 返回</Text></Pressable><View style={styles.headerInfo}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.episode}>{episode || "正在播放"}</Text></View></View>
-      {directPlayable ? <View style={styles.playerWrap}><VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" /><View style={styles.statusRow}><ActivityIndicator size="small" color="#F5B64B" /><Text style={styles.statusText}>播放器正在准备媒体；视频缓存由系统自动管理。</Text></View></View> : <View style={styles.unsupported}><Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text><Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以返回详情页切换线路，或在浏览器中打开。</Text><Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}><Text style={styles.externalText}>在浏览器打开</Text></Pressable></View>}
+      {directPlayable ? <View style={styles.playerWrap}><VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" /><View style={styles.statusRow}>{offline ? <Text style={styles.offlineBadge}>离线播放</Text> : <ActivityIndicator size="small" color="#F5B64B" />}<Text style={styles.statusText}>{offline ? "正在使用设备中的本地下载媒体。" : "播放器正在准备媒体；视频缓存由系统自动管理。"}</Text></View></View> : <View style={styles.unsupported}><Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text><Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以返回详情页切换线路，或在浏览器中打开。</Text><Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}><Text style={styles.externalText}>在浏览器打开</Text></Pressable></View>}
     </ScreenContainer>
     <GlobalBottomNavigation />
     </View>
@@ -49,6 +50,7 @@ const styles = StyleSheet.create({
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#050812" },
   statusRow: { flexDirection: "row", gap: 8, alignItems: "center", paddingHorizontal: 18, paddingTop: 13 },
   statusText: { color: "#8796B0", fontSize: 12, lineHeight: 18 },
+  offlineBadge: { color: "#A9E2BE", fontSize: 11, lineHeight: 17, fontWeight: "800", backgroundColor: "#1F523F", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   unsupported: { padding: 28, margin: 18, borderRadius: 16, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#2F4163" },
   unsupportedTitle: { color: "#F6F7FB", fontWeight: "800", fontSize: 16, lineHeight: 23 },
   unsupportedText: { color: "#AEB9CB", fontSize: 13, lineHeight: 21, marginTop: 9 },

@@ -78,7 +78,7 @@ export function getWatchHistory(): Promise<WatchHistoryEntry[]> {
 
 export async function clearLocalVodData(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
-  const appKeys = keys.filter((key) => key.startsWith(PREFIX));
+  const appKeys = keys.filter((key) => key.startsWith(PREFIX) && key !== SOURCE_KEY);
   if (appKeys.length) await AsyncStorage.multiRemove(appKeys);
 }
 
