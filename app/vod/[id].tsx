@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, V
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { VodPoster } from "@/components/vod-poster";
 import { fetchVodDetail, type MacCmsVodDetail } from "@/lib/maccms";
 import { cacheVodDetail, getCachedVodDetail, saveWatchHistory } from "@/lib/vod-storage";
@@ -53,11 +54,12 @@ export default function VodDetailScreen() {
     router.push({ pathname: "/player", params: { url, title: detail.name, episode: episodeName, source: source.name } } as never);
   };
 
-  if (isLoading && !detail) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#F5B64B" size="large" /></ScreenContainer>;
-  if (!detail) return <ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>无法加载影片</Text><Text style={styles.errorText}>{error ?? "影片不存在或已被删除"}</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回</Text></Pressable></ScreenContainer>;
+  if (isLoading && !detail) return <View style={styles.page}><ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#F5B64B" size="large" /></ScreenContainer><GlobalBottomNavigation /></View>;
+  if (!detail) return <View style={styles.page}><ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>无法加载影片</Text><Text style={styles.errorText}>{error ?? "影片不存在或已被删除"}</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回</Text></Pressable></ScreenContainer><GlobalBottomNavigation /></View>;
 
   const metadata = [detail.year, detail.area, detail.language].filter(Boolean).join(" · ");
   return (
+    <View style={styles.page}>
     <ScreenContainer containerClassName="bg-background">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹ 返回</Text></Pressable>
@@ -68,11 +70,14 @@ export default function VodDetailScreen() {
         {source ? <><Text style={styles.episodeLabel}>{source.name} · {source.episodes.length} 集</Text><FlatList horizontal data={source.episodes} keyExtractor={(item, index) => `${item.name}-${index}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.episodeList} renderItem={({ item }) => <Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.episode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable>} /></> : <Text style={styles.noSource}>数据源未提供可用播放线路。</Text>}
       </ScrollView>
     </ScreenContainer>
+    <GlobalBottomNavigation />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 18, paddingBottom: 36 },
+  page: { flex: 1, backgroundColor: "#0B1020" },
+  content: { padding: 18, paddingBottom: 112 },
   back: { alignSelf: "flex-start", paddingVertical: 8, paddingRight: 12, marginBottom: 12 },
   backLabel: { color: "#B9D7F6", fontSize: 14, lineHeight: 20, fontWeight: "700" },
   hero: { flexDirection: "row", gap: 15 },
