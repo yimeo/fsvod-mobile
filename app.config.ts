@@ -31,7 +31,7 @@ const env = {
   appName: "飞鸿影院",
   appSlug: "fsvod-mobile",
   // 稳定的项目品牌图标地址，同时保留本地 assets/images/icon.png 供原生应用打包。
-  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663815862054/BClYwvJZGWDzQYXL.png",
+  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663815862054/DEYCeNssrPzDBnzO.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
