@@ -14,7 +14,7 @@ const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, child
 export default function CategoriesScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ rootId?: string }>();
-  const { endpoint, categories, isBooting } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError } = useVodSource();
   const [rootId, setRootId] = useState("");
   const [childId, setChildId] = useState("");
   const [items, setItems] = useState<MacCmsVod[]>([]);
@@ -31,6 +31,9 @@ export default function CategoriesScreen() {
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
   const childChoices = useMemo(() => root.children.length ? [{ id: root.id, name: "全部", parentId: null, children: [] }, ...root.children] : [], [root]);
+  const currentSource = sources.find((source) => source.id === endpoint?.apiUrl || source.endpoint.apiUrl === endpoint?.apiUrl);
+  const sourceCaption = currentSource?.displayName?.trim() || currentSource?.endpoint.inputDomain?.trim() || endpoint?.inputDomain?.trim() || "当前数据源";
+  const sourceConnectionTone = sourceError ? "unhealthy" : currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
 
   useEffect(() => {
     const requestedRootId = Array.isArray(routeParams.rootId) ? routeParams.rootId[0] : routeParams.rootId;
@@ -99,7 +102,7 @@ export default function CategoriesScreen() {
 
   const listHeader = <View>
     <Text style={styles.heading}>分类浏览</Text>
-    <Text style={styles.brandHint}>飞鸿影院</Text>
+    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></View>
     <View style={styles.sectionHead}><Text style={styles.sectionTitle}>主分类</Text><Text style={styles.sectionMeta}>{categories.length} 个分类</Text></View>
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rootList} renderItem={({ item }) => <CategoryPill label={item.name} active={item.id === root.id} onPress={() => chooseRoot(item.id)} />} />
     {root.children.length ? <><View style={styles.sectionHead}><Text style={styles.sectionTitle}>{root.name}的子分类</Text><Text style={styles.sectionMeta}>{root.children.length} 个子分类</Text></View><FlatList horizontal data={childChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childList} renderItem={({ item }) => <CategoryPill label={item.name} small active={item.id === selectedTypeId} onPress={() => setChildId(item.id)} />} /></> : null}
@@ -129,7 +132,12 @@ function getClassicPageNumbers(page: number, pageCount: number): number[] {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 34 },
   heading: { color: "#F8FAFC", fontSize: 30, lineHeight: 38, fontWeight: "900", letterSpacing: -0.7 },
-  brandHint: { color: "#8E9AAD", fontSize: 12, lineHeight: 18, marginTop: 3 },
+  brandSourceRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 3, minWidth: 0 },
+  brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
+  sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
+  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
+  sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
+  sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
   sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 25, marginBottom: 11 },
   sectionTitle: { color: "#EAF0F7", fontSize: 15, lineHeight: 21, fontWeight: "900" },
   sectionMeta: { color: "#8190A7", fontSize: 11, lineHeight: 16, fontWeight: "700" },
