@@ -106,7 +106,7 @@ export default function HomeScreen() {
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><VodPoster title="飞鸿影院" url={null} style={styles.emptyIcon} /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
 
   const listHeader = <View>
-    <View style={styles.appHeader}><View style={styles.headerIdentity}><Text style={styles.brandName}>飞鸿影院</Text><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text><Text style={[styles.sourceConnectionText, sourceConnection.tone === "healthy" && styles.sourceConnectionTextHealthy, sourceConnection.tone === "unhealthy" && styles.sourceConnectionTextUnhealthy]}>（{sourceConnection.label}）</Text></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
+    <View style={styles.appHeader}><View style={styles.headerIdentity}><Text style={styles.brandName}>飞鸿影院</Text><View style={styles.sourceMetaRow}><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text><Text style={[styles.sourceConnectionText, sourceConnection.tone === "healthy" && styles.sourceConnectionTextHealthy, sourceConnection.tone === "unhealthy" && styles.sourceConnectionTextUnhealthy]}>（{sourceConnection.label}）</Text></View></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
     <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>网络不可用，正在展示本地已缓存内容。</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
@@ -129,10 +129,11 @@ function formatDuration(seconds: number): string {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingBottom: 34 },
-  appHeader: { height: 66, paddingTop: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerIdentity: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7, paddingRight: 12 },
+  appHeader: { height: 70, paddingTop: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerIdentity: { flex: 1, minWidth: 0, paddingRight: 12 },
   brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
-  sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, maxWidth: 116, flexShrink: 1 },
+  sourceMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 },
+  sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, maxWidth: 150, flexShrink: 1 },
   sourceConnectionText: { color: "#8E9BAE", fontSize: 10, lineHeight: 15, fontWeight: "800", flexShrink: 0 },
   sourceConnectionTextHealthy: { color: "#82D9AA" },
   sourceConnectionTextUnhealthy: { color: "#F0A183" },
