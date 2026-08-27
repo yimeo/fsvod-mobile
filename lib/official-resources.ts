@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { toChineseNetworkError } from "./network-error";
+
 export const OFFICIAL_RESOURCE_CONFIG_URLS = [
   "https://api1.066821.xyz/api.json",
   "https://api2.066821.xyz/api.json",
@@ -150,6 +152,8 @@ async function requestOfficialConfig(url: string): Promise<unknown> {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.text();
     return JSON.parse(body.replace(/^\uFEFF/, "")) as unknown;
+  } catch (error) {
+    throw new Error(toChineseNetworkError(error, "官方资源配置请求失败，请稍后重试"));
   } finally {
     clearTimeout(timeout);
   }
@@ -230,7 +234,7 @@ export async function syncOfficialResourceCatalog(force = false): Promise<Offici
     const state: OfficialResourceSyncState = {
       ...previous,
       lastCheckedAt: new Date(checkedAt).toISOString(),
-      lastError: error instanceof Error ? error.message : "官方资源配置暂时无法访问",
+      lastError: toChineseNetworkError(error, "官方资源配置暂时无法访问，请稍后重试"),
     };
     await saveOfficialResourceSyncState(state);
     return { state, resources: [], skipped: false, success: false };

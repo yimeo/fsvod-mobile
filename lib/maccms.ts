@@ -1,3 +1,5 @@
+import { toChineseNetworkError } from "./network-error";
+
 export interface MacCmsEndpoint {
   inputDomain: string;
   apiUrl: string;
@@ -131,6 +133,8 @@ async function getJson(url: string): Promise<RecordValue> {
     const parsed: unknown = JSON.parse(body.replace(/^\uFEFF/, ""));
     if (!isRecord(parsed)) throw new Error("响应不是有效 JSON 对象");
     return parsed;
+  } catch (error) {
+    throw new Error(toChineseNetworkError(error, "数据源请求失败，请稍后重试"));
   } finally {
     clearTimeout(timeout);
   }

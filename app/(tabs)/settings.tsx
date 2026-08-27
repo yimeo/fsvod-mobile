@@ -9,6 +9,7 @@ import { clearLocalVodData, getCategoryClassicPageSize, getCategoryPageMode, get
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 import { clearQueueTasks } from "@/lib/download-queue";
+import { toChineseNetworkError } from "@/lib/network-error";
 
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
@@ -71,7 +72,7 @@ export default function SettingsScreen() {
       setIsAddModalVisible(false);
       setMessage(`已识别并保存“${displayName || result.inputDomain}”数据源。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "数据源识别失败");
+      setMessage(toChineseNetworkError(error, "数据源识别失败，请检查地址后重试"));
     } finally {
       setIsSaving(false);
     }
@@ -113,7 +114,7 @@ export default function SettingsScreen() {
       setEditingSourceId(null);
       setMessage("数据源名称和地址已重新识别并保存。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "数据源更新失败");
+      setMessage(toChineseNetworkError(error, "数据源更新失败，请检查地址后重试"));
     } finally {
       setIsSaving(false);
     }
@@ -167,7 +168,7 @@ export default function SettingsScreen() {
                 <View style={styles.sourceTop}>
                   <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
                     <View style={[styles.sourceMark, source.health === "healthy" && styles.sourceMarkHealthy, source.health === "unhealthy" && styles.sourceMarkUnhealthy]}><View style={[styles.sourceMarkDot, source.health === "healthy" && styles.sourceMarkDotHealthy, source.health === "unhealthy" && styles.sourceMarkDotUnhealthy]} /></View>
-                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text>{source.sourceType === "official" ? <Text style={styles.sourceOfficialTag}>官方</Text> : null}</View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text>{source.sourceType === "official" ? <Text style={styles.sourceOfficialTag}>官方</Text> : null}</View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? toChineseNetworkError(source.lastError, "连接异常，请稍后重试") : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
                   </Pressable>
                   <Pressable accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed]}><Text style={styles.editSourceGlyph}>✎</Text></Pressable>
                 </View>

@@ -9,6 +9,7 @@ import {
 } from "@/lib/maccms";
 import { getOfficialResourceSyncState, OFFICIAL_RESOURCE_SYNC_INTERVAL_MS, syncOfficialResourceCatalog, type OfficialResourceSyncResult, type OfficialResourceSyncState } from "@/lib/official-resources";
 import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, replaceSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { toChineseNetworkError } from "@/lib/network-error";
 
 interface VodContextValue {
   endpoint: MacCmsEndpoint | null;
@@ -72,8 +73,9 @@ export function VodProvider({ children }: { children: ReactNode }) {
           setSourceError(null);
           nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "healthy");
         } catch (error) {
-          setSourceError(error instanceof Error ? error.message : "更新后的官方数据源暂不可用");
-          nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "unhealthy", error instanceof Error ? error.message : "连接失败");
+          const message = toChineseNetworkError(error, "更新后的官方数据源暂不可用，请稍后重试");
+          setSourceError(message);
+          nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "unhealthy", message);
         }
       }
     }
@@ -88,7 +90,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setCategories(buildCategoryTree([page.raw], page.items));
       setSourceError(null);
     } catch (error) {
-      setSourceError(error instanceof Error ? error.message : "数据源连接失败");
+      setSourceError(toChineseNetworkError(error, "数据源连接失败，请稍后重试"));
     }
   }, [endpoint]);
 
@@ -105,7 +107,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
         const page = await fetchVodPage(savedEndpoint, { page: 1 });
         setCategories(buildCategoryTree([page.raw], page.items));
       } catch (error) {
-        setSourceError(error instanceof Error ? error.message : "已保存数据源暂不可用");
+        setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
       }
     };
     void bootstrap();
@@ -133,7 +135,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
       await fetchVodPage(source.endpoint, { page: 1 });
       setSources(await updateSourceHealth(id, "healthy"));
     } catch (error) {
-      setSources(await updateSourceHealth(id, "unhealthy", error instanceof Error ? error.message : "连接失败"));
+      setSources(await updateSourceHealth(id, "unhealthy", toChineseNetworkError(error, "连接失败，请稍后重试")));
     }
   }, [sources]);
 
@@ -149,8 +151,9 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setSources(await updateSourceHealth(id, "healthy"));
     } catch (error) {
       setCategories([]);
-      setSourceError(error instanceof Error ? error.message : "数据源连接失败");
-      setSources(await updateSourceHealth(id, "unhealthy", error instanceof Error ? error.message : "连接失败"));
+      const message = toChineseNetworkError(error, "数据源连接失败，请稍后重试");
+      setSourceError(message);
+      setSources(await updateSourceHealth(id, "unhealthy", message));
     }
   }, [sources]);
 
@@ -173,7 +176,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setCategories(buildCategoryTree([page.raw], page.items));
     } catch (error) {
       setCategories([]);
-      setSourceError(error instanceof Error ? error.message : "备用数据源连接失败");
+      setSourceError(toChineseNetworkError(error, "备用数据源连接失败，请稍后重试"));
     }
   }, [endpoint?.apiUrl]);
 
