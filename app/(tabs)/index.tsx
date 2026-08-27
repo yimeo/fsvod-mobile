@@ -85,6 +85,11 @@ export default function HomeScreen() {
   const displayItems = items;
   const currentSource = sources.find((source) => source.id === endpoint?.apiUrl);
   const sourceCaption = currentSource?.displayName?.trim() || endpoint?.inputDomain || "";
+  const sourceConnection = currentSource?.health === "healthy"
+    ? { label: "连接正常", tone: "healthy" as const }
+    : currentSource?.health === "unhealthy"
+      ? { label: "连接异常", tone: "unhealthy" as const }
+      : { label: "尚未检测", tone: "unknown" as const };
   const continueProgress = latestHistory?.durationSeconds && latestHistory.positionSeconds ? Math.min(100, Math.max(0, Math.round((latestHistory.positionSeconds / latestHistory.durationSeconds) * 100))) : 0;
 
   const resumeHistory = async (entry: WatchHistoryEntry) => {
@@ -101,7 +106,7 @@ export default function HomeScreen() {
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><VodPoster title="飞鸿影院" url={null} style={styles.emptyIcon} /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
 
   const listHeader = <View>
-    <View style={styles.appHeader}><View><Text style={styles.brandName}>飞鸿影院</Text><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
+    <View style={styles.appHeader}><View><Text style={styles.brandName}>飞鸿影院</Text><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text><View style={styles.sourceConnection}><View style={[styles.sourceConnectionDot, sourceConnection.tone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnection.tone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text style={[styles.sourceConnectionText, sourceConnection.tone === "healthy" && styles.sourceConnectionTextHealthy, sourceConnection.tone === "unhealthy" && styles.sourceConnectionTextUnhealthy]}>{sourceConnection.label}</Text></View></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
     <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>网络不可用，正在展示本地已缓存内容。</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
@@ -124,9 +129,16 @@ function formatDuration(seconds: number): string {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingBottom: 34 },
-  appHeader: { height: 76, paddingTop: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  appHeader: { height: 84, paddingTop: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brandName: { color: "#F6F7FB", fontSize: 21, lineHeight: 27, fontWeight: "900", letterSpacing: 0.1 },
   sourceCaption: { color: "#8492A7", fontSize: 10, lineHeight: 14, marginTop: 1, maxWidth: 230 },
+  sourceConnection: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  sourceConnectionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#77869D" },
+  sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
+  sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
+  sourceConnectionText: { color: "#8E9BAE", fontSize: 9, lineHeight: 13, fontWeight: "800" },
+  sourceConnectionTextHealthy: { color: "#82D9AA" },
+  sourceConnectionTextUnhealthy: { color: "#F0A183" },
   searchButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#20293A", justifyContent: "center", alignItems: "center" },
   searchIcon: { color: "#F6F7FB", fontWeight: "700", fontSize: 28, lineHeight: 30, transform: [{ rotate: "-20deg" }] },
   heroCard: { minHeight: 307, overflow: "hidden", backgroundColor: "#1E2238", borderRadius: 24, padding: 28 },
