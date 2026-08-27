@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import type { MacCmsEndpoint, MacCmsEpisode, MacCmsVodDetail } from "@/lib/maccms";
+import type { MacCmsEndpoint, MacCmsEpisode, MacCmsPlaySource, MacCmsVodDetail } from "@/lib/maccms";
 
 const PREFIX = "fsvod:";
 const SOURCE_KEY = `${PREFIX}source`;
@@ -20,6 +20,7 @@ export interface WatchHistoryEntry {
   episodeUrl?: string;
   episodeIndex?: number;
   playlist?: MacCmsEpisode[];
+  playSources?: MacCmsPlaySource[];
   positionSeconds?: number;
   durationSeconds?: number;
 }

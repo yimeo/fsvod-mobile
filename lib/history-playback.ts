@@ -1,4 +1,4 @@
-import { fetchVodDetail, type MacCmsEndpoint, type MacCmsEpisode } from "@/lib/maccms";
+import { fetchVodDetail, type MacCmsEndpoint, type MacCmsEpisode, type MacCmsPlaySource } from "@/lib/maccms";
 import { getOfflineDownload } from "@/lib/offline-downloads";
 import type { WatchHistoryEntry } from "@/lib/vod-storage";
 
@@ -13,6 +13,7 @@ export interface HistoryPlaybackParams {
   offline: "0" | "1";
   episodeIndex: string;
   playlist: string;
+  playSources: string;
   resumePosition: string;
 }
 
@@ -21,11 +22,12 @@ export async function buildHistoryPlaybackParams(entry: WatchHistoryEntry, endpo
   let episodeName = entry.episodeName || "影视内容";
   let sourceName = entry.sourceName;
   let playlist = entry.playlist ?? [];
+  let playSources: MacCmsPlaySource[] = entry.playSources ?? [];
   let episodeIndex = entry.episodeIndex ?? 0;
   let title = entry.name;
   let posterUrl = entry.posterUrl;
 
-  if (!episodeUrl) {
+  if (!episodeUrl || !playSources.length) {
     const detail = await fetchVodDetail(endpoint, entry.id);
     const source = detail.sources.find((item) => item.name === entry.sourceName) ?? detail.sources[0];
     if (!source?.episodes.length) throw new Error("该影片当前没有可直接播放的剧集");
@@ -36,6 +38,7 @@ export async function buildHistoryPlaybackParams(entry: WatchHistoryEntry, endpo
     episodeName = selected.name;
     sourceName = source.name;
     playlist = source.episodes;
+    playSources = detail.sources;
     title = detail.name;
     posterUrl = detail.posterUrl ?? entry.posterUrl;
   }
@@ -52,6 +55,7 @@ export async function buildHistoryPlaybackParams(entry: WatchHistoryEntry, endpo
     offline: offline ? "1" : "0",
     episodeIndex: String(Math.max(0, episodeIndex)),
     playlist: JSON.stringify(playlist),
+    playSources: JSON.stringify(playSources),
     resumePosition: String(Math.max(0, entry.positionSeconds ?? 0)),
   };
 }
