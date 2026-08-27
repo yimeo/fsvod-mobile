@@ -94,24 +94,50 @@ export function VodProvider({ children }: { children: ReactNode }) {
     }
   }, [endpoint]);
 
+  const activateFirstAvailableSource = useCallback(async (candidates: SavedMacCmsSource[]) => {
+    let lastError: string | null = null;
+    for (const candidate of candidates) {
+      try {
+        const page = await fetchVodPage(candidate.endpoint, { page: 1 });
+        await saveEndpoint(candidate.endpoint);
+        setEndpoint(candidate.endpoint);
+        setCategories(buildCategoryTree([page.raw], page.items));
+        setSourceError(null);
+        setSources(await updateSourceHealth(candidate.id, "healthy"));
+        return true;
+      } catch (error) {
+        lastError = toChineseNetworkError(error, "数据源连接失败，请稍后重试");
+        setSources(await updateSourceHealth(candidate.id, "unhealthy", lastError));
+      }
+    }
+    if (lastError) setSourceError(`未找到可用数据源：${lastError}`);
+    return false;
+  }, []);
+
   useEffect(() => {
     const bootstrap = async () => {
       const [savedEndpoint, savedSources, savedOfficialResourceSync] = await Promise.all([getEndpoint(), getSources(), getOfficialResourceSyncState()]);
       setSources(savedSources);
-      setEndpoint(savedEndpoint);
       setOfficialResourceSync(savedOfficialResourceSync);
-      setIsBooting(false);
-      void syncOfficialResources();
-      if (!savedEndpoint) return;
-      try {
-        const page = await fetchVodPage(savedEndpoint, { page: 1 });
-        setCategories(buildCategoryTree([page.raw], page.items));
-      } catch (error) {
-        setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
+      if (savedEndpoint) {
+        setEndpoint(savedEndpoint);
+        try {
+          const page = await fetchVodPage(savedEndpoint, { page: 1 });
+          setCategories(buildCategoryTree([page.raw], page.items));
+        } catch (error) {
+          setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
+        }
+        void syncOfficialResources();
+      } else {
+        await syncOfficialResources();
+        const refreshedSources = await getSources();
+        setSources(refreshedSources);
+        await activateFirstAvailableSource(refreshedSources);
       }
+      setIsBooting(false);
     };
     void bootstrap();
-  }, [syncOfficialResources]);
+  }, [activateFirstAvailableSource, syncOfficialResources]);
 
   useEffect(() => {
     const interval = setInterval(() => { void syncOfficialResources(); }, OFFICIAL_RESOURCE_SYNC_INTERVAL_MS);
