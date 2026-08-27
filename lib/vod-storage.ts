@@ -9,6 +9,7 @@ const DETAIL_PREFIX = `${PREFIX}detail:`;
 const SEARCH_KEY = `${PREFIX}searches`;
 const HISTORY_KEY = `${PREFIX}history`;
 const CATEGORY_ORDER_KEY = `${PREFIX}category-order`;
+const PLAY_SOURCE_FAVORITES_KEY = `${PREFIX}play-source-favorites`;
 
 export interface WatchHistoryEntry {
   id: string;
@@ -145,6 +146,14 @@ export function getCategoryOrder(): Promise<string[]> {
 
 export async function saveCategoryOrder(order: string[]): Promise<void> {
   await AsyncStorage.setItem(CATEGORY_ORDER_KEY, JSON.stringify(order));
+}
+
+export function getFavoritePlaySources(): Promise<string[]> {
+  return getJson<string[]>(PLAY_SOURCE_FAVORITES_KEY, []);
+}
+
+export async function saveFavoritePlaySources(names: string[]): Promise<void> {
+  await AsyncStorage.setItem(PLAY_SOURCE_FAVORITES_KEY, JSON.stringify([...new Set(names.filter(Boolean))]));
 }
 
 export async function saveWatchHistory(entry: WatchHistoryEntry): Promise<WatchHistoryEntry[]> {
