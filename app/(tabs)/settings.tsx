@@ -14,7 +14,7 @@ import { clearQueueTasks, formatStorageLimit } from "@/lib/download-queue";
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
 export default function SettingsScreen() {
-  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, renameSource, reorderSource, sourceError } = useVodSource();
+  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, updateSource, reorderSource, sourceError } = useVodSource();
   const { settings } = useDownloadQueue();
   const router = useRouter();
   const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
@@ -22,6 +22,7 @@ export default function SettingsScreen() {
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [sourceDisplayName, setSourceDisplayName] = useState("");
+  const [sourceAddress, setSourceAddress] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
   const [categoryPageMode, setCategoryPageMode] = useState<CategoryPageMode>("manual");
@@ -50,9 +51,10 @@ export default function SettingsScreen() {
     setIsSaving(true);
     setMessage(null);
     try {
-      const result = await configureSource(domain);
-      setDomain(result.inputDomain);
-      setMessage("已识别并保存 MACCMS 数据接口。");
+      const result = await configureSource(domain, sourceDisplayName);
+      setDomain("");
+      setSourceDisplayName("");
+      setMessage(`已识别并保存“${result.inputDomain}”数据源。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "数据源识别失败");
     } finally {
@@ -76,12 +78,20 @@ export default function SettingsScreen() {
   const beginRename = (source: SavedMacCmsSource) => {
     setEditingSourceId(source.id);
     setSourceDisplayName(source.displayName);
+    setSourceAddress(source.endpoint.apiUrl);
   };
 
-  const saveSourceName = async (id: string) => {
-    await renameSource(id, sourceDisplayName);
-    setEditingSourceId(null);
-    setMessage("数据源名称已保存。");
+  const saveSourceEdits = async (id: string) => {
+    setIsSaving(true);
+    try {
+      await updateSource(id, sourceAddress, sourceDisplayName);
+      setEditingSourceId(null);
+      setMessage("数据源名称和地址已重新识别并保存。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "数据源更新失败");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const clearCaches = () => {
@@ -118,7 +128,9 @@ export default function SettingsScreen() {
         <View style={styles.preferenceCard}><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>仅在 Wi‑Fi 下载</Text><Text style={styles.preferenceText}>{settings?.wifiOnly ? "开启后不会使用移动数据下载剧集" : "已允许使用移动数据下载"}</Text></View><View style={[styles.preferencePill, settings?.wifiOnly && styles.preferencePillActive]}><Text style={styles.preferencePillText}>{settings?.wifiOnly ? "已开启" : "已关闭"}</Text></View></View><View style={styles.preferenceDivider} /><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>最大缓存容量</Text><Text style={styles.preferenceText}>当前 {formatBytes(cache.offlineBytes)} / {settings ? formatStorageLimit(settings.storageLimitBytes) : "—"}</Text></View><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.preferenceLink, pressed && styles.pressed]}><Text style={styles.preferenceLinkText}>管理 ›</Text></Pressable></View></View>
         <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类页翻页模式</Text><Text style={styles.paginationText}>选择分类内容滚动到末尾时的加载方式。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载更多</Text></Pressable></View></View>
         <View style={styles.section}>
-          <Text style={styles.label}>MACCMS 站点域名</Text>
+          <Text style={styles.label}>数据源名称</Text>
+          <TextInput value={sourceDisplayName} onChangeText={setSourceDisplayName} autoCorrect={false} returnKeyType="next" placeholder="例如：主线路、备用源" placeholderTextColor="#71809B" style={styles.input} />
+          <Text style={[styles.label, styles.addressLabel]}>数据源地址</Text>
           <TextInput value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} />
           <Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.primaryButton, (pressed || isSaving) && styles.pressed, isSaving && styles.disabled]}>
             {isSaving ? <ActivityIndicator color="#10182B" /> : <Text style={styles.primaryText}>添加并识别数据源</Text>}
@@ -131,10 +143,10 @@ export default function SettingsScreen() {
           {sources.length ? sources.map((source, index) => (
             <View key={source.id} style={[styles.sourceItem, endpoint?.apiUrl === source.id && styles.sourceItemActive]}>
               {editingSourceId === source.id ? (
-                <View style={styles.renameRow}>
-                  <TextInput value={sourceDisplayName} onChangeText={setSourceDisplayName} autoFocus returnKeyType="done" onSubmitEditing={() => void saveSourceName(source.id)} placeholder="数据源名称" placeholderTextColor="#71809B" style={styles.renameInput} />
-                  <Pressable onPress={() => void saveSourceName(source.id)} style={({ pressed }) => [styles.renameSave, pressed && styles.pressed]}><Text style={styles.renameSaveText}>保存</Text></Pressable>
-                  <Pressable onPress={() => setEditingSourceId(null)} style={({ pressed }) => [styles.renameCancel, pressed && styles.pressed]}><Text style={styles.miniActionText}>取消</Text></Pressable>
+                <View style={styles.editForm}>
+                  <TextInput value={sourceDisplayName} onChangeText={setSourceDisplayName} autoFocus autoCorrect={false} returnKeyType="next" placeholder="数据源名称" placeholderTextColor="#71809B" style={styles.renameInput} />
+                  <TextInput value={sourceAddress} onChangeText={setSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void saveSourceEdits(source.id)} placeholder="数据源地址" placeholderTextColor="#71809B" style={styles.renameInput} />
+                  <View style={styles.editActions}><Pressable disabled={isSaving} onPress={() => void saveSourceEdits(source.id)} style={({ pressed }) => [styles.renameSave, (pressed || isSaving) && styles.pressed]}>{isSaving ? <ActivityIndicator color="#10182B" size="small" /> : <Text style={styles.renameSaveText}>保存并识别</Text>}</Pressable><Pressable onPress={() => setEditingSourceId(null)} style={({ pressed }) => [styles.renameCancel, pressed && styles.pressed]}><Text style={styles.miniActionText}>取消</Text></Pressable></View>
                 </View>
               ) : (
                 <View style={styles.sourceTop}>
@@ -222,6 +234,7 @@ const styles = StyleSheet.create({
   paginationOptionTextActive: { color: "#151821" },
   section: { marginTop: 22, padding: 16, borderRadius: 16, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#283452" },
   label: { color: "#DCE2EE", fontWeight: "700", fontSize: 13, lineHeight: 19, marginBottom: 9 },
+  addressLabel: { marginTop: 13 },
   input: { height: 47, borderRadius: 11, borderWidth: 1, borderColor: "#344464", backgroundColor: "#0F1729", color: "#F6F7FB", fontSize: 14, paddingHorizontal: 12, paddingVertical: 0 },
   primaryButton: { height: 45, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: "#F5B64B", marginTop: 12 },
   primaryText: { color: "#11192B", fontWeight: "800", fontSize: 14 },
@@ -244,9 +257,10 @@ const styles = StyleSheet.create({
   sourceStatus: { color: "#7FD0A4", fontSize: 10, lineHeight: 15, marginTop: 1 },
   editSourceButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#202A3D", justifyContent: "center", alignItems: "center" },
   editSourceGlyph: { color: "#D5DFED", fontSize: 18, lineHeight: 21, fontWeight: "900" },
-  renameRow: { flexDirection: "row", gap: 7, alignItems: "center" },
-  renameInput: { flex: 1, height: 34, borderRadius: 8, borderWidth: 1, borderColor: "#536B92", color: "#F6F7FB", backgroundColor: "#0B1221", fontSize: 12, paddingHorizontal: 9, paddingVertical: 0 },
-  renameSave: { height: 30, paddingHorizontal: 9, borderRadius: 7, justifyContent: "center", backgroundColor: "#F5B64B" },
+  editForm: { gap: 8 },
+  editActions: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  renameInput: { height: 38, borderRadius: 9, borderWidth: 1, borderColor: "#536B92", color: "#F6F7FB", backgroundColor: "#0B1221", fontSize: 12, paddingHorizontal: 10, paddingVertical: 0 },
+  renameSave: { height: 32, paddingHorizontal: 11, borderRadius: 8, justifyContent: "center", backgroundColor: "#F5B64B" },
   renameSaveText: { color: "#10182B", fontSize: 10, fontWeight: "900" },
   renameCancel: { height: 30, paddingHorizontal: 8, borderWidth: 1, borderColor: "#3D5577", borderRadius: 7, justifyContent: "center" },
   sourceActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 13 },

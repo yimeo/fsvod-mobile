@@ -7,7 +7,7 @@ import {
   type MacCmsCategory,
   type MacCmsEndpoint,
 } from "@/lib/maccms";
-import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, replaceSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
 
 interface VodContextValue {
   endpoint: MacCmsEndpoint | null;
@@ -15,11 +15,12 @@ interface VodContextValue {
   categories: MacCmsCategory[];
   isBooting: boolean;
   sourceError: string | null;
-  configureSource: (domain: string) => Promise<MacCmsEndpoint>;
+  configureSource: (address: string, displayName?: string) => Promise<MacCmsEndpoint>;
   switchSource: (id: string) => Promise<void>;
   deleteSource: (id: string) => Promise<void>;
   checkSource: (id: string) => Promise<void>;
   renameSource: (id: string, displayName: string) => Promise<void>;
+  updateSource: (id: string, address: string, displayName: string) => Promise<void>;
   reorderSource: (id: string, direction: -1 | 1) => Promise<void>;
   refreshCategories: () => Promise<void>;
 }
@@ -61,10 +62,10 @@ export function VodProvider({ children }: { children: ReactNode }) {
     void bootstrap();
   }, []);
 
-  const configureSource = useCallback(async (domain: string) => {
-    const catalog = await discoverMacCms(domain);
+  const configureSource = useCallback(async (address: string, displayName?: string) => {
+    const catalog = await discoverMacCms(address);
     await saveEndpoint(catalog.endpoint);
-    setSources(await upsertSource(catalog.endpoint));
+    setSources(await upsertSource(catalog.endpoint, "healthy", null, displayName));
     setEndpoint(catalog.endpoint);
     setCategories(catalog.categories);
     setSourceError(null);
@@ -126,12 +127,23 @@ export function VodProvider({ children }: { children: ReactNode }) {
     setSources(await renameSource(id, displayName));
   }, []);
 
+  const updateSavedSource = useCallback(async (id: string, address: string, displayName: string) => {
+    const catalog = await discoverMacCms(address);
+    const wasActive = endpoint?.apiUrl === id;
+    setSources(await replaceSource(id, catalog.endpoint, displayName));
+    if (!wasActive) return;
+    await saveEndpoint(catalog.endpoint);
+    setEndpoint(catalog.endpoint);
+    setCategories(catalog.categories);
+    setSourceError(null);
+  }, [endpoint?.apiUrl]);
+
   const reorderSource = useCallback(async (id: string, direction: -1 | 1) => {
     setSources(await moveSource(id, direction));
   }, []);
 
   return (
-    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, reorderSource, refreshCategories }}>
+    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories }}>
       {children}
     </VodContext.Provider>
   );

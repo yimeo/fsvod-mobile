@@ -83,11 +83,29 @@ export function saveSources(sources: SavedMacCmsSource[]): Promise<void> {
   return AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(sources));
 }
 
-export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null): Promise<SavedMacCmsSource[]> {
+export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null, displayName?: string): Promise<SavedMacCmsSource[]> {
   const sources = await getSources();
   const current = sources.find((source) => source.id === sourceId(endpoint));
-  const entry: SavedMacCmsSource = { id: sourceId(endpoint), endpoint, displayName: current?.displayName ?? endpoint.inputDomain, health, lastCheckedAt: new Date().toISOString(), lastError };
+  const entry: SavedMacCmsSource = { id: sourceId(endpoint), endpoint, displayName: displayName?.trim() || current?.displayName || endpoint.inputDomain, health, lastCheckedAt: new Date().toISOString(), lastError };
   const next = [entry, ...sources.filter((source) => source.id !== entry.id)];
+  await saveSources(next);
+  return next;
+}
+
+export async function replaceSource(id: string, endpoint: MacCmsEndpoint, displayName: string): Promise<SavedMacCmsSource[]> {
+  const sources = await getSources();
+  const previousIndex = sources.findIndex((source) => source.id === id);
+  const current = sources[previousIndex];
+  const entry: SavedMacCmsSource = {
+    id: sourceId(endpoint),
+    endpoint,
+    displayName: displayName.trim() || current?.displayName || endpoint.inputDomain,
+    health: "healthy",
+    lastCheckedAt: new Date().toISOString(),
+    lastError: null,
+  };
+  const next = sources.filter((source) => source.id !== id && source.id !== entry.id);
+  next.splice(Math.max(0, Math.min(previousIndex, next.length)), 0, entry);
   await saveSources(next);
   return next;
 }
