@@ -82,7 +82,7 @@ export default function HomeScreen() {
   };
 
   const latestHistory = history[0];
-  const displayItems = items.slice(0, 18);
+  const displayItems = items;
   const continueProgress = latestHistory?.durationSeconds && latestHistory.positionSeconds ? Math.min(100, Math.max(0, Math.round((latestHistory.positionSeconds / latestHistory.durationSeconds) * 100))) : 0;
 
   const resumeHistory = async (entry: WatchHistoryEntry) => {
