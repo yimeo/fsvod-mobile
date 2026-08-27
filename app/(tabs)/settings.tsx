@@ -5,7 +5,7 @@ import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { clearLocalVodData, getLocalCacheSummary } from "@/lib/vod-storage";
+import { clearLocalVodData, getLocalCacheSummary, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 import { useDownloadQueue } from "@/lib/download-queue-context";
@@ -14,11 +14,12 @@ import { clearQueueTasks, formatStorageLimit } from "@/lib/download-queue";
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
 export default function SettingsScreen() {
-  const { endpoint, categories, configureSource, sourceError } = useVodSource();
+  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, sourceError } = useVodSource();
   const { tasks, settings, isWifi } = useDownloadQueue();
   const router = useRouter();
   const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
   const [isSaving, setIsSaving] = useState(false);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
 
@@ -46,6 +47,19 @@ export default function SettingsScreen() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const runCheck = async (id: string) => {
+    setCheckingId(id);
+    await checkSource(id);
+    setCheckingId(null);
+  };
+
+  const confirmDeleteSource = (source: SavedMacCmsSource) => {
+    Alert.alert("删除数据源", `确定删除 ${source.endpoint.inputDomain} 吗？`, [
+      { text: "取消", style: "cancel" },
+      { text: "删除", style: "destructive", onPress: () => { void deleteSource(source.id); } },
+    ]);
   };
 
   const clearCaches = () => {
@@ -83,14 +97,15 @@ export default function SettingsScreen() {
           <Text style={styles.label}>MACCMS 站点域名</Text>
           <TextInput value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} />
           <Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.primaryButton, (pressed || isSaving) && styles.pressed, isSaving && styles.disabled]}>
-            {isSaving ? <ActivityIndicator color="#10182B" /> : <Text style={styles.primaryText}>自动识别并保存</Text>}
+            {isSaving ? <ActivityIndicator color="#10182B" /> : <Text style={styles.primaryText}>添加并识别数据源</Text>}
           </Pressable>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
         </View>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>当前连接</Text>
-          {endpoint ? <><Text style={styles.endpoint}>{endpoint.apiUrl}</Text><Text style={styles.meta}>已识别 {categories.length} 个一级分类 · {new Date(endpoint.detectedAt).toLocaleString("zh-CN")}</Text></> : <Text style={styles.meta}>尚未配置数据源</Text>}
+          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>已保存数据源</Text><Text style={styles.sourceIntro}>点按名称即可切换，检测可更新连接状态。</Text></View><Text style={styles.sourceCount}>{sources.length} 个</Text></View>
+          {sources.length ? sources.map((source) => <View key={source.id} style={[styles.sourceItem, endpoint?.apiUrl === source.id && styles.sourceItemActive]}><Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}><View style={[styles.healthDot, source.health === "healthy" ? styles.healthGood : source.health === "unhealthy" ? styles.healthBad : styles.healthUnknown]} /><View style={styles.sourceInfo}><Text numberOfLines={1} style={styles.sourceName}>{source.endpoint.inputDomain}</Text><Text numberOfLines={1} style={styles.sourceMeta}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>{endpoint?.apiUrl === source.id ? <Text style={styles.currentTag}>当前</Text> : null}</Pressable><View style={styles.sourceActions}><Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id} style={({ pressed }) => [styles.miniAction, (pressed || checkingId === source.id) && styles.pressed]}>{checkingId === source.id ? <ActivityIndicator color="#B7D6F7" size="small" /> : <Text style={styles.miniActionText}>检测</Text>}</Pressable><Pressable onPress={() => confirmDeleteSource(source)} style={({ pressed }) => [styles.miniAction, styles.removeAction, pressed && styles.pressed]}><Text style={styles.removeActionText}>删除</Text></Pressable></View></View>) : <Text style={styles.meta}>尚未配置数据源</Text>}
+          {endpoint ? <><Text numberOfLines={1} style={styles.endpoint}>{endpoint.apiUrl}</Text><Text style={styles.meta}>当前已识别 {categories.length} 个一级分类</Text></> : null}
         </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>本地缓存</Text>
@@ -138,6 +153,25 @@ const styles = StyleSheet.create({
   message: { color: "#93D6AE", fontSize: 12, lineHeight: 18, marginTop: 10 },
   error: { color: "#F8C174", fontSize: 12, lineHeight: 18, marginTop: 10 },
   sectionTitle: { color: "#F4F6FA", fontSize: 15, fontWeight: "800", lineHeight: 21, marginBottom: 10 },
+  sourceHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  sourceIntro: { color: "#8896AD", fontSize: 11, lineHeight: 16, marginTop: -6, marginBottom: 10 },
+  sourceCount: { color: "#F5C66E", fontSize: 11, lineHeight: 16, fontWeight: "800", backgroundColor: "#2A2533", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  sourceItem: { backgroundColor: "#0F1729", borderWidth: 1, borderColor: "#2C3953", borderRadius: 11, marginTop: 8, padding: 10 },
+  sourceItemActive: { borderColor: "#C99037", backgroundColor: "#1C2133" },
+  sourceMain: { flexDirection: "row", alignItems: "center", gap: 8 },
+  healthDot: { width: 8, height: 8, borderRadius: 4 },
+  healthGood: { backgroundColor: "#69C89B" },
+  healthBad: { backgroundColor: "#E27878" },
+  healthUnknown: { backgroundColor: "#9AA8BC" },
+  sourceInfo: { flex: 1, minWidth: 0 },
+  sourceName: { color: "#EEF2F8", fontSize: 13, lineHeight: 19, fontWeight: "800" },
+  sourceMeta: { color: "#8E9CB0", fontSize: 10, lineHeight: 15, marginTop: 1 },
+  currentTag: { color: "#11192B", fontSize: 10, fontWeight: "900", backgroundColor: "#F5B64B", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  sourceActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 9 },
+  miniAction: { minWidth: 48, height: 27, paddingHorizontal: 9, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#3D5577", borderRadius: 7 },
+  miniActionText: { color: "#B7D6F7", fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  removeAction: { borderColor: "#70414D" },
+  removeActionText: { color: "#E8A8AF", fontSize: 10, lineHeight: 14, fontWeight: "800" },
   endpoint: { color: "#A6CEF6", fontSize: 12, lineHeight: 19, fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }), backgroundColor: "#0F1729", padding: 10, borderRadius: 9 },
   meta: { color: "#9CA7BE", fontSize: 12, lineHeight: 18, marginTop: 9 },
   cacheGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },

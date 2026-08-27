@@ -13,10 +13,12 @@ const ALL_CATEGORY: MacCmsCategory = { id: "all", name: "全部", parentId: null
 
 export default function HomeScreen() {
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{ typeId?: string }>();
+  const routeParams = useLocalSearchParams<{ typeId?: string; area?: string; year?: string }>();
   const { endpoint, categories, isBooting, sourceError, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("all");
   const [activeTypeId, setActiveTypeId] = useState<string | undefined>();
+  const [activeArea, setActiveArea] = useState<string | undefined>();
+  const [activeYear, setActiveYear] = useState<string | undefined>();
   const [items, setItems] = useState<MacCmsVod[]>([]);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
@@ -42,7 +44,11 @@ export default function HomeScreen() {
     if (!root) return;
     setActiveRootId(root.id);
     setActiveTypeId(targetTypeId);
-  }, [categories, routeParams.typeId]);
+    const area = Array.isArray(routeParams.area) ? routeParams.area[0] : routeParams.area;
+    const year = Array.isArray(routeParams.year) ? routeParams.year[0] : routeParams.year;
+    setActiveArea(area || undefined);
+    setActiveYear(year || undefined);
+  }, [categories, routeParams.area, routeParams.typeId, routeParams.year]);
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint) return;
@@ -51,8 +57,8 @@ export default function HomeScreen() {
     try {
       const shouldAggregateChildren = activeRootId !== "all" && activeTypeId === selectedRoot.id && selectedRoot.children.length > 0;
       const result = shouldAggregateChildren
-        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id }))))
-        : await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId });
+        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id, area: activeArea, year: activeYear }))))
+        : await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId, area: activeArea, year: activeYear });
       setItems((current) => append ? [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))] : result.items);
       setPage(result.page);
       setPageCount(result.pageCount);
@@ -61,15 +67,17 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeRootId, activeTypeId, endpoint, selectedRoot]);
+  }, [activeArea, activeRootId, activeTypeId, activeYear, endpoint, selectedRoot]);
 
   useEffect(() => { if (endpoint) void loadPage(1); }, [endpoint, activeTypeId, loadPage]);
 
   const chooseRoot = (id: string) => {
     setActiveRootId(id);
     setActiveTypeId(id === "all" ? undefined : id);
+    setActiveArea(undefined);
+    setActiveYear(undefined);
   };
-  const chooseChild = (id: string) => setActiveTypeId(id);
+  const chooseChild = (id: string) => { setActiveTypeId(id); setActiveArea(undefined); setActiveYear(undefined); };
   const refresh = async () => {
     setIsRefreshing(true);
     await Promise.all([loadPage(1), refreshCategories(), getWatchHistory().then(setHistory)]);
@@ -81,14 +89,16 @@ export default function HomeScreen() {
 
   const latestHistory = history[0];
   const featuredType = categories[0]?.id ?? "all";
-  const sectionTitle = activeTypeId === selectedRoot.id && selectedRoot.children.length > 0 ? `${selectedRoot.name} · 全部内容` : activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name;
+  const weeklyPopular = useMemo(() => items.slice(0, 5), [items]);
+  const sectionTitle = `${activeTypeId === selectedRoot.id && selectedRoot.children.length > 0 ? `${selectedRoot.name} · 全部内容` : activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name}${activeArea ? ` · ${activeArea}` : ""}${activeYear ? ` · ${activeYear}` : ""}`;
 
   const renderHeader = () => <View>
     <View style={styles.appHeader}><View style={styles.brandLine}><Image source={require("@/assets/images/icon.png")} style={styles.headerIcon} /><Text style={styles.brandName}>飞鸿影院</Text></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.buttonPressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
-    <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => chooseRoot(featuredType)} style={({ pressed }) => [styles.heroAction, pressed && styles.buttonPressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>
+    {weeklyPopular.length ? <View style={styles.weeklySection}><View style={styles.weeklyHeading}><View><Text style={styles.weeklyKicker}>WEEKLY POPULAR</Text><Text style={styles.weeklyTitle}>本周人气</Text></View><Text style={styles.weeklyMeta}>左右滑动</Text></View><FlatList horizontal data={weeklyPopular} keyExtractor={(item) => `weekly-${item.id}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weeklyList} snapToInterval={296} decelerationRate="fast" renderItem={({ item, index }) => <Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: item.id } } as never)} style={({ pressed }) => [styles.weeklyCard, pressed && styles.buttonPressed]}><VodPoster title={item.name} url={item.posterUrl} thumbnailUrl={item.thumbnailUrl} style={styles.weeklyPoster} /><View style={styles.weeklyShade} /><View style={styles.weeklyIndex}><Text style={styles.weeklyIndexText}>{String(index + 1).padStart(2, "0")}</Text></View><View style={styles.weeklyInfo}><Text numberOfLines={2} style={styles.weeklyName}>{item.name}</Text><Text numberOfLines={1} style={styles.weeklyDetail}>{[item.typeName, item.remarks].filter(Boolean).join(" · ") || "本周热门"}</Text></View></Pressable>} /></View> : <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => chooseRoot(featuredType)} style={({ pressed }) => [styles.heroAction, pressed && styles.buttonPressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>}
     <FlatList horizontal data={rootCategories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={activeRootId === item.id} onPress={() => chooseRoot(item.id)} />} />
     {childCategoryChoices.length > 0 ? <FlatList horizontal data={childCategoryChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subcategoryList} renderItem={({ item }) => <CategoryChip label={item.name} compact active={activeTypeId === item.id} onPress={() => chooseChild(item.id)} />} /> : null}
-    {latestHistory ? <View style={styles.continueSection}><Text style={styles.sectionTitle}>继续观看</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text><Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: latestHistory.id } } as never)} style={({ pressed }) => [styles.continueCard, pressed && styles.buttonPressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text style={styles.continueMeta}>{latestHistory.sourceName} · {latestHistory.episodeName}</Text><View style={styles.continueLine}><View style={styles.continueProgress} /></View></View></Pressable></View> : null}
+    {latestHistory ? <View style={styles.continueSection}><Text style={styles.sectionTitle}>观看记录</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text><Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: latestHistory.id } } as never)} style={({ pressed }) => [styles.continueCard, pressed && styles.buttonPressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text style={styles.continueMeta}>{latestHistory.sourceName} · {latestHistory.episodeName}</Text><View style={styles.continueLine}><View style={styles.continueProgress} /></View></View></Pressable></View> : null}
+    {history.length > 1 ? <View style={styles.playlistSection}><View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>播放列表</Text><Text style={styles.sectionSubtitle}>最近加入的播放记录</Text></View></View><FlatList horizontal data={history.slice(1, 5)} keyExtractor={(item) => `playlist-${item.id}-${item.episodeName}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistList} renderItem={({ item }) => <Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: item.id } } as never)} style={({ pressed }) => [styles.playlistItem, pressed && styles.buttonPressed]}><VodPoster title={item.name} url={item.posterUrl} style={styles.playlistPoster} /><Text numberOfLines={1} style={styles.playlistName}>{item.name}</Text><Text numberOfLines={1} style={styles.playlistEpisode}>{item.episodeName}</Text></Pressable>} /></View> : null}
     <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>{sectionTitle} · 来自当前数据源的更新内容</Text></View><Pressable onPress={() => chooseRoot("all")} style={({ pressed }) => [styles.moreButton, pressed && styles.buttonPressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
     {sourceError ? <Text style={styles.warning}>{sourceError}</Text> : null}{loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
@@ -116,6 +126,20 @@ const styles = StyleSheet.create({
   heroAction: { alignSelf: "flex-start", height: 50, paddingHorizontal: 18, borderRadius: 14, backgroundColor: "#F5B64B", marginTop: 20, flexDirection: "row", alignItems: "center", gap: 9 },
   heroActionIcon: { color: "#15131A", fontSize: 13, lineHeight: 18 },
   heroActionText: { color: "#15131A", fontSize: 14, lineHeight: 20, fontWeight: "900" },
+  weeklySection: { marginTop: 10 },
+  weeklyHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 2, marginBottom: 10 },
+  weeklyKicker: { color: "#F5B64B", fontSize: 10, lineHeight: 14, letterSpacing: 1.5, fontWeight: "900" },
+  weeklyTitle: { color: "#F7F8FB", fontSize: 25, lineHeight: 33, fontWeight: "900", marginTop: 2 },
+  weeklyMeta: { color: "#93A0B5", fontSize: 11, lineHeight: 16, marginBottom: 4 },
+  weeklyList: { gap: 12, paddingRight: 18 },
+  weeklyCard: { width: 284, height: 194, borderRadius: 22, overflow: "hidden", backgroundColor: "#1B2338" },
+  weeklyPoster: { ...StyleSheet.absoluteFillObject },
+  weeklyShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(7,11,23,0.40)" },
+  weeklyIndex: { position: "absolute", top: 13, left: 13, borderRadius: 9, backgroundColor: "rgba(8,13,26,0.68)", paddingHorizontal: 8, paddingVertical: 4 },
+  weeklyIndexText: { color: "#F7C66A", fontSize: 11, lineHeight: 15, fontWeight: "900", letterSpacing: 0.8 },
+  weeklyInfo: { position: "absolute", left: 16, right: 16, bottom: 16 },
+  weeklyName: { color: "#FFFFFF", fontSize: 20, lineHeight: 27, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.70)", textShadowRadius: 6 },
+  weeklyDetail: { color: "#E0E5EE", fontSize: 12, lineHeight: 18, marginTop: 4, fontWeight: "700" },
   categoryList: { gap: 10, paddingVertical: 22, paddingRight: 18 },
   subcategoryList: { gap: 8, paddingBottom: 14, paddingRight: 18, marginTop: -10 },
   chip: { height: 43, paddingHorizontal: 18, justifyContent: "center", borderRadius: 22, backgroundColor: "#20293D", borderWidth: 1, borderColor: "#33405A" },
@@ -134,6 +158,12 @@ const styles = StyleSheet.create({
   continueMeta: { color: "#9CA9BC", fontSize: 12, lineHeight: 18, marginTop: 5 },
   continueLine: { height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "#263249", marginTop: 13 },
   continueProgress: { width: "42%", height: "100%", backgroundColor: "#F5B64B" },
+  playlistSection: { marginBottom: 25 },
+  playlistList: { gap: 11, marginTop: -2, paddingRight: 18 },
+  playlistItem: { width: 94 },
+  playlistPoster: { width: 94, height: 132, borderRadius: 13 },
+  playlistName: { color: "#EAEFF7", fontSize: 12, lineHeight: 18, fontWeight: "800", marginTop: 7 },
+  playlistEpisode: { color: "#9CA9BC", fontSize: 11, lineHeight: 16, marginTop: 1 },
   contentHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingBottom: 15 },
   moreButton: { paddingVertical: 4, paddingLeft: 12 },
   moreText: { color: "#F5B64B", fontSize: 13, lineHeight: 19, fontWeight: "900" },

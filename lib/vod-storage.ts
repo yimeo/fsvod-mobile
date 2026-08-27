@@ -4,6 +4,7 @@ import type { MacCmsEndpoint, MacCmsVodDetail } from "@/lib/maccms";
 
 const PREFIX = "fsvod:";
 const SOURCE_KEY = `${PREFIX}source`;
+const SOURCES_KEY = `${PREFIX}sources`;
 const DETAIL_PREFIX = `${PREFIX}detail:`;
 const SEARCH_KEY = `${PREFIX}searches`;
 const HISTORY_KEY = `${PREFIX}history`;
@@ -16,6 +17,16 @@ export interface WatchHistoryEntry {
   sourceName: string;
   episodeName: string;
   watchedAt: string;
+}
+
+export type SourceHealth = "unknown" | "healthy" | "unhealthy";
+
+export interface SavedMacCmsSource {
+  id: string;
+  endpoint: MacCmsEndpoint;
+  health: SourceHealth;
+  lastCheckedAt: string | null;
+  lastError: string | null;
 }
 
 async function getJson<T>(key: string, fallback: T): Promise<T> {
@@ -33,6 +44,48 @@ export async function saveEndpoint(endpoint: MacCmsEndpoint): Promise<void> {
 
 export function getEndpoint(): Promise<MacCmsEndpoint | null> {
   return getJson<MacCmsEndpoint | null>(SOURCE_KEY, null);
+}
+
+export function clearEndpoint(): Promise<void> {
+  return AsyncStorage.removeItem(SOURCE_KEY);
+}
+
+function sourceId(endpoint: MacCmsEndpoint): string {
+  return endpoint.apiUrl;
+}
+
+export async function getSources(): Promise<SavedMacCmsSource[]> {
+  const saved = await getJson<SavedMacCmsSource[]>(SOURCES_KEY, []);
+  if (saved.length) return saved;
+  const legacy = await getEndpoint();
+  if (!legacy) return [];
+  const migrated: SavedMacCmsSource[] = [{ id: sourceId(legacy), endpoint: legacy, health: "unknown", lastCheckedAt: null, lastError: null }];
+  await AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(migrated));
+  return migrated;
+}
+
+export function saveSources(sources: SavedMacCmsSource[]): Promise<void> {
+  return AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(sources));
+}
+
+export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null): Promise<SavedMacCmsSource[]> {
+  const sources = await getSources();
+  const entry: SavedMacCmsSource = { id: sourceId(endpoint), endpoint, health, lastCheckedAt: new Date().toISOString(), lastError };
+  const next = [entry, ...sources.filter((source) => source.id !== entry.id)];
+  await saveSources(next);
+  return next;
+}
+
+export async function updateSourceHealth(id: string, health: SourceHealth, lastError: string | null = null): Promise<SavedMacCmsSource[]> {
+  const next = (await getSources()).map((source) => source.id === id ? { ...source, health, lastCheckedAt: new Date().toISOString(), lastError } : source);
+  await saveSources(next);
+  return next;
+}
+
+export async function removeSource(id: string): Promise<SavedMacCmsSource[]> {
+  const next = (await getSources()).filter((source) => source.id !== id);
+  await saveSources(next);
+  return next;
 }
 
 export async function cacheVodDetail(detail: MacCmsVodDetail): Promise<void> {
@@ -78,7 +131,7 @@ export function getWatchHistory(): Promise<WatchHistoryEntry[]> {
 
 export async function clearLocalVodData(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
-  const appKeys = keys.filter((key) => key.startsWith(PREFIX) && key !== SOURCE_KEY);
+  const appKeys = keys.filter((key) => key.startsWith(PREFIX) && key !== SOURCE_KEY && key !== SOURCES_KEY);
   if (appKeys.length) await AsyncStorage.multiRemove(appKeys);
 }
 

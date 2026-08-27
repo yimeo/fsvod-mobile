@@ -23,6 +23,7 @@ export default function VodDetailScreen() {
   const [sourceIndex, setSourceIndex] = useState(0);
   const [downloads, setDownloads] = useState<Record<string, OfflineDownload>>({});
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isDownloadPickerOpen, setIsDownloadPickerOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -49,7 +50,7 @@ export default function VodDetailScreen() {
     if (!detail || !source) return;
     await saveWatchHistory({ id: detail.id, name: detail.name, posterUrl: detail.posterUrl, sourceName: source.name, episodeName, watchedAt: new Date().toISOString() });
     const offline = downloads[url];
-    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, title: detail.name, episode: episodeName, source: source.name, offline: offline ? "1" : "0" } } as never);
+    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, title: detail.name, episode: episodeName, source: source.name, offline: offline ? "1" : "0", episodeIndex: String(source.episodes.findIndex((item) => item.url === url)), playlist: JSON.stringify(source.episodes) } } as never);
   };
 
   const download = async (episodeName: string, url: string) => {
@@ -57,13 +58,6 @@ export default function VodDetailScreen() {
     setDownloadError(null);
     const count = await enqueue([{ vodId: detail.id, vodName: detail.name, sourceName: source.name, episodeName, remoteUrl: url }]);
     if (count === 0) setDownloadError("该剧集已在下载队列中或当前线路不支持离线缓存");
-  };
-
-  const downloadSource = async () => {
-    if (!detail || !source) return;
-    setDownloadError(null);
-    const count = await enqueue(source.episodes.filter((episode) => !downloads[episode.url] && isOfflineDownloadSupported(episode.url)).map((episode) => ({ vodId: detail.id, vodName: detail.name, sourceName: source.name, episodeName: episode.name, remoteUrl: episode.url })));
-    if (count === 0) setDownloadError("本线路没有可加入的新下载任务");
   };
 
   if (isLoading && !detail) return <View style={styles.page}><ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#F5B64B" size="large" /></ScreenContainer><GlobalBottomNavigation /></View>;
@@ -76,11 +70,11 @@ export default function VodDetailScreen() {
     <Text style={styles.metadata}>{metadata || detail.typeName || "影视"}</Text>
     {detail.typeName ? <View style={styles.typePill}><Text style={styles.typeText}>{detail.typeName}</Text></View> : null}
     <Pressable disabled={!firstEpisode} onPress={() => firstEpisode && void play(firstEpisode.name, firstEpisode.url)} style={({ pressed }) => [styles.playButton, !firstEpisode && styles.disabled, pressed && styles.pressed]}><Text style={styles.playIcon}>▶</Text><Text style={styles.playText}>立即播放</Text></Pressable>
-    <Pressable disabled={!source} onPress={() => void downloadSource()} style={({ pressed }) => [styles.downloadAllButton, !source && styles.disabled, pressed && styles.pressed]}><Text style={styles.downloadAllIcon}>↓</Text><Text style={styles.downloadAllText}>下载本线路，选择画质</Text></Pressable>
+    <Pressable disabled={!source} onPress={() => setIsDownloadPickerOpen((current) => !current)} style={({ pressed }) => [styles.downloadAllButton, !source && styles.disabled, pressed && styles.pressed]}><Text style={styles.downloadAllIcon}>↓</Text><Text style={styles.downloadAllText}>{isDownloadPickerOpen ? "收起下载选集" : "下载剧集"}</Text></Pressable>
     <View style={styles.section}><Text style={styles.sectionTitle}>剧情简介</Text><Text style={styles.contentText}>{detail.content || "当前数据源未提供影片简介。"}</Text></View>
     {(detail.actor || detail.director) ? <View style={styles.creditBox}>{detail.director ? <Text style={styles.credit}>导演：{detail.director}</Text> : null}{detail.actor ? <Text style={styles.credit}>主演：{detail.actor}</Text> : null}</View> : null}
     <View style={styles.section}><Text style={styles.sectionTitle}>选择播放源</Text><FlatList horizontal data={detail.sources} keyExtractor={(item) => item.name} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sourceList} renderItem={({ item, index }) => <Pressable onPress={() => setSourceIndex(index)} style={({ pressed }) => [styles.sourceChip, sourceIndex === index && styles.sourceChipActive, pressed && styles.pressed]}><Text style={[styles.sourceText, sourceIndex === index && styles.sourceTextActive]}>{item.name}</Text></Pressable>} /></View>
-    {source ? <View style={styles.section}><View style={styles.episodeHeader}><View><Text style={styles.sectionTitle}>剧集</Text><Text style={styles.episodeMeta}>{source.name} · {source.episodes.length} 集 · {settings?.wifiOnly ? (isWifi ? "Wi‑Fi 自动下载" : "等待 Wi‑Fi") : "前台自动下载"}</Text></View><Pressable onPress={() => void downloadSource()} style={({ pressed }) => [styles.episodeDownload, pressed && styles.pressed]}><Text style={styles.episodeDownloadText}>下载全集</Text></Pressable></View>{downloadError ? <Text style={styles.downloadError}>{downloadError}</Text> : null}<FlatList data={source.episodes} key={`episodes-${source.name}`} numColumns={3} scrollEnabled={false} keyExtractor={(item, index) => `${item.name}-${index}`} contentContainerStyle={styles.episodeList} columnWrapperStyle={source.episodes.length ? styles.episodeRow : undefined} renderItem={({ item }) => { const cached = downloads[item.url]; const task = tasks.find((entry) => entry.remoteUrl === item.url); const supported = isOfflineDownloadSupported(item.url); const status = cached ? "已缓存" : task?.status === "downloading" ? (task.progress?.fraction !== null && task.progress?.fraction !== undefined ? `${Math.round(task.progress.fraction * 100)}%` : "下载中") : task?.status === "queued" ? "队列中" : task?.status === "paused" ? "已暂停" : task?.status === "failed" ? "重试" : supported ? "下载" : "仅播放"; const action = task?.status === "failed" ? () => retry(task.id) : task?.status === "paused" ? () => resumeTask(task.id) : () => download(item.name, item.url); return <View style={styles.episodeCell}><Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.episode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodePlay}>▶</Text><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable><Pressable disabled={!supported || task?.status === "downloading" || task?.status === "queued" || Boolean(cached)} onPress={() => void action()} style={({ pressed }) => [styles.episodeAction, cached && styles.episodeCached, task?.status === "failed" && styles.episodeFailed, (!supported || task?.status === "downloading" || task?.status === "queued") && !cached && styles.downloadDisabled, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.episodeActionText, cached && styles.episodeCachedText]}>{status}</Text></Pressable></View>; }} /></View> : null}
+    {source ? <View style={styles.section}><View style={styles.episodeHeader}><View><Text style={styles.sectionTitle}>播放列表</Text><Text style={styles.episodeMeta}>{source.name} · {source.episodes.length} 集</Text></View></View><FlatList data={source.episodes} key={`play-${source.name}`} numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.name}-${index}`} contentContainerStyle={styles.episodeList} columnWrapperStyle={source.episodes.length ? styles.episodeRow : undefined} renderItem={({ item }) => <Pressable onPress={() => void play(item.name, item.url)} style={({ pressed }) => [styles.playEpisode, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.episodeText}>{item.name}</Text></Pressable>} />{isDownloadPickerOpen ? <View style={styles.downloadPicker}><View style={styles.downloadPickerHead}><View><Text style={styles.downloadPickerTitle}>选择下载剧集</Text><Text style={styles.downloadPickerMeta}>{settings?.wifiOnly ? (isWifi ? "Wi‑Fi 环境下自动下载" : "已加入队列，等待 Wi‑Fi") : "已加入队列后自动下载"}</Text></View><Pressable onPress={() => setIsDownloadPickerOpen(false)} style={({ pressed }) => [styles.closePicker, pressed && styles.pressed]}><Text style={styles.closePickerText}>收起</Text></Pressable></View>{downloadError ? <Text style={styles.downloadError}>{downloadError}</Text> : null}<FlatList data={source.episodes} key={`download-${source.name}`} numColumns={3} scrollEnabled={false} keyExtractor={(item, index) => `${item.name}-${index}`} contentContainerStyle={styles.downloadList} columnWrapperStyle={source.episodes.length ? styles.episodeRow : undefined} renderItem={({ item }) => { const cached = downloads[item.url]; const task = tasks.find((entry) => entry.remoteUrl === item.url); const supported = isOfflineDownloadSupported(item.url); const status = cached ? "已缓存" : task?.status === "downloading" ? "下载中" : task?.status === "queued" ? "队列中" : task?.status === "paused" ? "继续" : task?.status === "failed" ? "重试" : supported ? "下载" : "不支持"; const action = task?.status === "failed" ? () => retry(task.id) : task?.status === "paused" ? () => resumeTask(task.id) : () => download(item.name, item.url); return <Pressable disabled={!supported || task?.status === "downloading" || task?.status === "queued" || Boolean(cached)} onPress={() => void action()} style={({ pressed }) => [styles.downloadEpisode, cached && styles.episodeCached, task?.status === "failed" && styles.episodeFailed, (!supported || task?.status === "downloading" || task?.status === "queued") && !cached && styles.downloadDisabled, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.episodeActionText, cached && styles.episodeCachedText]}>{item.name} · {status}</Text></Pressable>; }} /></View> : null}</View> : null}
   </ScrollView></ScreenContainer><GlobalBottomNavigation /></View>;
 }
 
@@ -114,16 +108,19 @@ const styles = StyleSheet.create({
   sourceTextActive: { color: "#171821" },
   episodeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   episodeMeta: { color: "#8F9CAF", fontSize: 11, lineHeight: 17, marginTop: 3 },
-  episodeDownload: { height: 34, borderRadius: 10, paddingHorizontal: 10, backgroundColor: "#202D41", justifyContent: "center" },
-  episodeDownloadText: { color: "#E7C176", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   downloadError: { color: "#F3BF7B", fontSize: 11, lineHeight: 17, backgroundColor: "#30252C", borderRadius: 8, padding: 8, marginTop: 10 },
   episodeList: { gap: 9, marginTop: 15 },
   episodeRow: { gap: 9, marginBottom: 9 },
-  episodeCell: { flex: 1, minWidth: 0 },
-  episode: { height: 43, paddingHorizontal: 7, borderTopLeftRadius: 10, borderTopRightRadius: 10, backgroundColor: "#20293A", flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center" },
-  episodePlay: { color: "#F5B64B", fontSize: 10, lineHeight: 14 },
+  playEpisode: { flex: 1, minWidth: 0, height: 42, paddingHorizontal: 7, borderRadius: 10, backgroundColor: "#20293A", alignItems: "center", justifyContent: "center" },
   episodeText: { color: "#E5EAF2", fontSize: 12, lineHeight: 17, fontWeight: "800" },
-  episodeAction: { height: 25, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: "#263A57", justifyContent: "center", alignItems: "center" },
+  downloadPicker: { marginTop: 22, padding: 13, borderRadius: 14, backgroundColor: "#151E31", borderWidth: 1, borderColor: "#394B6C" },
+  downloadPickerHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  downloadPickerTitle: { color: "#EEF2F8", fontSize: 15, lineHeight: 21, fontWeight: "900" },
+  downloadPickerMeta: { color: "#93A1B5", fontSize: 11, lineHeight: 16, marginTop: 2 },
+  closePicker: { height: 29, paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: "#415474", justifyContent: "center" },
+  closePickerText: { color: "#B9D4EF", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  downloadList: { gap: 9, marginTop: 13 },
+  downloadEpisode: { flex: 1, minWidth: 0, height: 38, paddingHorizontal: 6, borderRadius: 9, backgroundColor: "#263A57", alignItems: "center", justifyContent: "center" },
   episodeActionText: { color: "#A8CBEF", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   episodeCached: { backgroundColor: "#1F523F" },
   episodeCachedText: { color: "#B1E6C3" },

@@ -7,14 +7,18 @@ import {
   type MacCmsCategory,
   type MacCmsEndpoint,
 } from "@/lib/maccms";
-import { getEndpoint, saveEndpoint } from "@/lib/vod-storage";
+import { clearEndpoint, getEndpoint, getSources, removeSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
 
 interface VodContextValue {
   endpoint: MacCmsEndpoint | null;
+  sources: SavedMacCmsSource[];
   categories: MacCmsCategory[];
   isBooting: boolean;
   sourceError: string | null;
   configureSource: (domain: string) => Promise<MacCmsEndpoint>;
+  switchSource: (id: string) => Promise<void>;
+  deleteSource: (id: string) => Promise<void>;
+  checkSource: (id: string) => Promise<void>;
   refreshCategories: () => Promise<void>;
 }
 
@@ -22,6 +26,7 @@ const VodContext = createContext<VodContextValue | null>(null);
 
 export function VodProvider({ children }: { children: ReactNode }) {
   const [endpoint, setEndpoint] = useState<MacCmsEndpoint | null>(null);
+  const [sources, setSources] = useState<SavedMacCmsSource[]>([]);
   const [categories, setCategories] = useState<MacCmsCategory[]>([]);
   const [isBooting, setIsBooting] = useState(true);
   const [sourceError, setSourceError] = useState<string | null>(null);
@@ -39,7 +44,8 @@ export function VodProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const bootstrap = async () => {
-      const savedEndpoint = await getEndpoint();
+      const [savedEndpoint, savedSources] = await Promise.all([getEndpoint(), getSources()]);
+      setSources(savedSources);
       setEndpoint(savedEndpoint);
       setIsBooting(false);
       if (!savedEndpoint) return;
@@ -56,14 +62,66 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const configureSource = useCallback(async (domain: string) => {
     const catalog = await discoverMacCms(domain);
     await saveEndpoint(catalog.endpoint);
+    setSources(await upsertSource(catalog.endpoint));
     setEndpoint(catalog.endpoint);
     setCategories(catalog.categories);
     setSourceError(null);
     return catalog.endpoint;
   }, []);
 
+  const checkSource = useCallback(async (id: string) => {
+    const source = sources.find((item) => item.id === id);
+    if (!source) return;
+    try {
+      await fetchVodPage(source.endpoint, { page: 1 });
+      setSources(await updateSourceHealth(id, "healthy"));
+    } catch (error) {
+      setSources(await updateSourceHealth(id, "unhealthy", error instanceof Error ? error.message : "连接失败"));
+    }
+  }, [sources]);
+
+  const switchSource = useCallback(async (id: string) => {
+    const source = sources.find((item) => item.id === id);
+    if (!source) return;
+    await saveEndpoint(source.endpoint);
+    setEndpoint(source.endpoint);
+    try {
+      const page = await fetchVodPage(source.endpoint, { page: 1 });
+      setCategories(buildCategoryTree([page.raw], page.items));
+      setSourceError(null);
+      setSources(await updateSourceHealth(id, "healthy"));
+    } catch (error) {
+      setCategories([]);
+      setSourceError(error instanceof Error ? error.message : "数据源连接失败");
+      setSources(await updateSourceHealth(id, "unhealthy", error instanceof Error ? error.message : "连接失败"));
+    }
+  }, [sources]);
+
+  const deleteSource = useCallback(async (id: string) => {
+    const next = await removeSource(id);
+    setSources(next);
+    if (endpoint?.apiUrl !== id) return;
+    const fallback = next[0];
+    if (!fallback) {
+      setEndpoint(null);
+      setCategories([]);
+      setSourceError(null);
+      await clearEndpoint();
+      return;
+    }
+    await saveEndpoint(fallback.endpoint);
+    setEndpoint(fallback.endpoint);
+    try {
+      const page = await fetchVodPage(fallback.endpoint, { page: 1 });
+      setCategories(buildCategoryTree([page.raw], page.items));
+    } catch (error) {
+      setCategories([]);
+      setSourceError(error instanceof Error ? error.message : "备用数据源连接失败");
+    }
+  }, [endpoint?.apiUrl]);
+
   return (
-    <VodContext.Provider value={{ endpoint, categories, isBooting, sourceError, configureSource, refreshCategories }}>
+    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, refreshCategories }}>
       {children}
     </VodContext.Provider>
   );

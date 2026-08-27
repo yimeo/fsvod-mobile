@@ -263,7 +263,7 @@ export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog
 
 export async function fetchVodPage(
   endpoint: MacCmsEndpoint,
-  options: { page?: number; typeId?: string; keyword?: string },
+  options: { page?: number; typeId?: string; keyword?: string; area?: string; year?: string },
 ): Promise<MacCmsPage> {
   const payload = await getJson(
     addQuery(endpoint.apiUrl, {
@@ -271,6 +271,8 @@ export async function fetchVodPage(
       pg: options.page ?? 1,
       t: options.typeId,
       wd: options.keyword,
+      area: options.area,
+      year: options.year,
       pagesize: 20,
     }),
   );

@@ -1,153 +1,88 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { VodPoster } from "@/components/vod-poster";
-import { sortCategoriesByOrder, promoteCategoryId } from "@/lib/category-order";
-import { fetchVodPage, type MacCmsCategory } from "@/lib/maccms";
-import { getCategoryOrder, saveCategoryOrder } from "@/lib/vod-storage";
+import { fetchVodPage, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
 import { useVodSource } from "@/lib/vod-context";
 
-interface CategoryPreview {
-  total: number | null;
-  posterUrl: string | null;
-}
+const ALL = "all";
 
 export default function CategoriesScreen() {
   const router = useRouter();
   const { endpoint, categories, isBooting } = useVodSource();
-  const [previews, setPreviews] = useState<Record<string, CategoryPreview>>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
-  const [isLoadingPreviews, setIsLoadingPreviews] = useState(false);
+  const [rootId, setRootId] = useState(ALL);
+  const [childId, setChildId] = useState(ALL);
+  const [area, setArea] = useState(ALL);
+  const [year, setYear] = useState(ALL);
+  const [sample, setSample] = useState<MacCmsVod[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => { void getCategoryOrder().then(setCategoryOrder); }, []);
+  const root = useMemo(() => categories.find((category) => category.id === rootId) ?? null, [categories, rootId]);
+  const childOptions = useMemo(() => root ? [{ id: root.id, name: "全部" }, ...root.children] : [], [root]);
+  const areas = useMemo(() => [...new Set(sample.map((item) => item.area).filter(Boolean))].slice(0, 8), [sample]);
+  const years = useMemo(() => [...new Set(sample.map((item) => item.year).filter(Boolean))].sort((a, b) => b.localeCompare(a)).slice(0, 8), [sample]);
 
   useEffect(() => {
-    if (!endpoint || categories.length === 0) return;
+    if (rootId === ALL && categories[0]) {
+      setRootId(categories[0].id);
+      setChildId(categories[0].id);
+    }
+  }, [categories, rootId]);
+
+  useEffect(() => {
+    if (!endpoint || rootId === ALL) { setSample([]); return; }
     let cancelled = false;
-    const loadPreviews = async () => {
-      setIsLoadingPreviews(true);
-      const settled = await Promise.allSettled(categories.map(async (category) => {
-        const page = await fetchVodPage(endpoint, { page: 1, typeId: category.id });
-        return [category.id, { total: page.total, posterUrl: page.items[0]?.posterUrl ?? null }] as const;
-      }));
-      if (cancelled) return;
-      const next: Record<string, CategoryPreview> = {};
-      settled.forEach((result) => {
-        if (result.status === "fulfilled") next[result.value[0]] = result.value[1];
-      });
-      setPreviews(next);
-      setIsLoadingPreviews(false);
-    };
-    void loadPreviews();
+    setLoading(true);
+    void fetchVodPage(endpoint, { page: 1, typeId: rootId })
+      .then((page) => { if (!cancelled) setSample(page.items); })
+      .catch(() => { if (!cancelled) setSample([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [categories, endpoint]);
+  }, [endpoint, rootId]);
 
-  const orderedCategories = useMemo(() => sortCategoriesByOrder(categories, categoryOrder), [categories, categoryOrder]);
+  const chooseRoot = useCallback((id: string) => {
+    setRootId(id);
+    setChildId(id);
+    setArea(ALL);
+    setYear(ALL);
+  }, []);
 
-  const rememberCategory = useCallback(async (categoryId: string) => {
-    const next = promoteCategoryId(categoryOrder, categoryId);
-    setCategoryOrder(next);
-    await saveCategoryOrder(next);
-  }, [categoryOrder]);
-
-  const openCategory = async (categoryId: string) => {
-    await rememberCategory(categoryId);
-    router.navigate({ pathname: "/", params: { typeId: categoryId } } as never);
+  const apply = () => {
+    const typeId = childId !== ALL ? childId : rootId !== ALL ? rootId : undefined;
+    router.navigate({ pathname: "/", params: { ...(typeId ? { typeId } : {}), ...(area !== ALL ? { area } : {}), ...(year !== ALL ? { year } : {}) } } as never);
   };
 
-  if (!endpoint && !isBooting) {
-    return (
-      <ScreenContainer className="px-6" containerClassName="bg-background">
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>配置后显示全部分类</Text>
-          <Text style={styles.emptyText}>连接 MACCMS 数据源后，这里会自动展示站点的一级影视分类、封面、影片数量与二级分类。</Text>
-          <Pressable onPress={() => router.navigate("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryText}>配置数据源</Text></Pressable>
-        </View>
-      </ScreenContainer>
-    );
-  }
+  if (!endpoint && !isBooting) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.empty}><Text style={styles.emptyTitle}>先连接一个数据源</Text><Text style={styles.emptyText}>配置 MACCMS 数据源后，即可按分类、地区和年份快速筛选。</Text><Pressable onPress={() => router.navigate("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryText}>去添加数据源</Text></Pressable></View></ScreenContainer>;
 
-  return (
-    <ScreenContainer containerClassName="bg-background">
-      <FlatList
-        data={orderedCategories}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={<View><Text style={styles.eyebrow}>EXPLORE CATEGORIES</Text><Text style={styles.heading}>影视分类</Text><Text style={styles.intro}>分类封面与影片总量按当前数据源动态加载。访问或置顶常用分类后，排序会自动保存在本机。</Text>{isLoadingPreviews ? <View style={styles.loadingRow}><ActivityIndicator color="#F5B64B" size="small" /><Text style={styles.loadingText}>正在读取分类封面与影片数量…</Text></View> : null}</View>}
-        renderItem={({ item, index }) => <CategoryCard category={item} index={index} preview={previews[item.id]} expanded={expandedId === item.id} onToggle={() => setExpandedId((current) => current === item.id ? null : item.id)} onOpen={() => void openCategory(item.id)} onOpenChild={(id) => void openCategory(id)} onPromote={() => void rememberCategory(item.id)} />}
-        ListEmptyComponent={!isBooting ? <View style={styles.noData}><Text style={styles.noDataTitle}>暂无一级分类</Text><Text style={styles.noDataText}>当前数据源尚未返回分类信息。请在设置中重新识别，或先浏览首页数据。</Text></View> : null}
-      />
-    </ScreenContainer>
-  );
+  return <ScreenContainer containerClassName="bg-background"><FlatList data={[]} keyExtractor={(_, index) => String(index)} renderItem={() => null} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} ListHeaderComponent={<View><Text style={styles.eyebrow}>BROWSE & FILTER</Text><Text style={styles.heading}>分类筛选</Text><Text style={styles.lead}>用更少的操作，找到现在想看的内容。</Text><FilterSection title="一级分类"><FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipList} renderItem={({ item }) => <FilterChip label={item.name} active={rootId === item.id} onPress={() => chooseRoot(item.id)} />} /></FilterSection>{root ? <FilterSection title="二级分类"><FlatList horizontal data={childOptions} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipList} renderItem={({ item }) => <FilterChip label={item.name} active={childId === item.id} onPress={() => setChildId(item.id)} />} /></FilterSection> : null}<FilterSection title="地区">{loading ? <ActivityIndicator color="#F5B64B" size="small" /> : <FlatList horizontal data={["全部", ...areas]} keyExtractor={(item) => item} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipList} renderItem={({ item }) => <FilterChip label={item} active={area === (item === "全部" ? ALL : item)} onPress={() => setArea(item === "全部" ? ALL : item)} />} />}</FilterSection><FilterSection title="年份"><FlatList horizontal data={["全部", ...years]} keyExtractor={(item) => item} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipList} renderItem={({ item }) => <FilterChip label={item} active={year === (item === "全部" ? ALL : item)} onPress={() => setYear(item === "全部" ? ALL : item)} />} /></FilterSection><View style={styles.summary}><Text style={styles.summaryLabel}>当前筛选</Text><Text numberOfLines={1} style={styles.summaryText}>{[root?.name, childId !== root?.id ? childOptions.find((item) => item.id === childId)?.name : null, area !== ALL ? area : null, year !== ALL ? year : null].filter(Boolean).join(" · ") || "全部影视"}</Text></View><Pressable onPress={apply} style={({ pressed }) => [styles.applyButton, pressed && styles.pressed]}><Text style={styles.applyText}>查看筛选结果</Text><Text style={styles.applyArrow}>›</Text></Pressable></View>} /></ScreenContainer>;
 }
 
-function CategoryCard({ category, index, preview, expanded, onToggle, onOpen, onOpenChild, onPromote }: { category: MacCmsCategory; index: number; preview?: CategoryPreview; expanded: boolean; onToggle: () => void; onOpen: () => void; onOpenChild: (id: string) => void; onPromote: () => void }) {
-  const hasChildren = category.children.length > 0;
-  const tones = [styles.toneGold, styles.toneBlue, styles.toneViolet, styles.toneTeal];
-  const amount = preview?.total === null || preview?.total === undefined ? "统计中" : `${preview.total} 部`;
-  return (
-    <View style={[styles.card, tones[index % tones.length]]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${category.name} 分类内容`} onPress={onOpen} style={({ pressed }) => [styles.cardMain, pressed && styles.pressed]}>
-        <VodPoster title={category.name} url={preview?.posterUrl ?? null} style={styles.cover} />
-        <View style={styles.cardInfo}>
-          <View style={styles.cardTop}><View style={styles.ordinal}><Text style={styles.ordinalText}>{String(index + 1).padStart(2, "0")}</Text></View><Text style={styles.amount}>{amount}</Text></View>
-          <Text style={styles.cardTitle}>{category.name}</Text>
-          <Text numberOfLines={2} style={styles.summary}>{hasChildren ? `含 ${category.children.length} 个二级分类，可展开查看。` : "来自当前数据源的一级影视内容。"}</Text>
-          <Text style={styles.openText}>进入该分类 ›</Text>
-        </View>
-      </Pressable>
-      <View style={styles.tools}>
-        {hasChildren ? <Pressable onPress={onToggle} style={({ pressed }) => [styles.toolButton, pressed && styles.pressed]}><Text style={styles.toolText}>{expanded ? "收起二级分类" : `展开二级分类 (${category.children.length})`}</Text></Pressable> : <View />}
-        <Pressable onPress={onPromote} style={({ pressed }) => [styles.pinButton, pressed && styles.pressed]}><Text style={styles.pinText}>置顶常用</Text></Pressable>
-      </View>
-      {expanded ? <View style={styles.children}><Text style={styles.childrenTitle}>二级分类</Text><View style={styles.childRow}>{category.children.map((child) => <Pressable key={child.id} onPress={() => onOpenChild(child.id)} style={({ pressed }) => [styles.childChip, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.childText}>{child.name}</Text></Pressable>)}</View></View> : null}
-    </View>
-  );
-}
+function FilterSection({ title, children }: { title: string; children: ReactNode }) { return <View style={styles.filterSection}><Text style={styles.filterTitle}>{title}</Text>{children}</View>; }
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) { return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text></Pressable>; }
 
 const styles = StyleSheet.create({
-  content: { padding: 18, paddingBottom: 34 },
-  eyebrow: { color: "#F5B64B", letterSpacing: 1.6, fontSize: 10, lineHeight: 15, fontWeight: "800", paddingTop: 16 },
-  heading: { color: "#F6F7FB", fontWeight: "800", fontSize: 27, lineHeight: 35, marginTop: 3 },
-  intro: { color: "#9CA7BE", fontSize: 13, lineHeight: 21, marginTop: 8, marginBottom: 14 },
-  loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 15 },
-  loadingText: { color: "#A8B5C9", fontSize: 11, lineHeight: 17 },
-  card: { borderRadius: 17, marginBottom: 12, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)" },
-  toneGold: { backgroundColor: "#292541" },
-  toneBlue: { backgroundColor: "#162D4A" },
-  toneViolet: { backgroundColor: "#30213F" },
-  toneTeal: { backgroundColor: "#15363A" },
-  cardMain: { padding: 13, flexDirection: "row", gap: 13 },
-  cover: { width: 92, height: 124, borderRadius: 12, flexShrink: 0 },
-  cardInfo: { flex: 1, minWidth: 0, justifyContent: "center" },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  ordinal: { backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 8, minWidth: 34, height: 25, justifyContent: "center", alignItems: "center" },
-  ordinalText: { color: "#F8D28D", fontWeight: "800", fontSize: 11, letterSpacing: 0.6 },
-  amount: { color: "#B9D9FA", fontWeight: "800", fontSize: 12, lineHeight: 18 },
-  cardTitle: { color: "#F6F7FB", fontSize: 21, lineHeight: 28, fontWeight: "800", marginTop: 10 },
-  summary: { color: "#C4CDDC", fontSize: 12, lineHeight: 19, marginTop: 4 },
-  openText: { color: "#F8D28D", fontSize: 12, lineHeight: 18, fontWeight: "800", marginTop: 9 },
-  tools: { minHeight: 43, paddingHorizontal: 13, paddingBottom: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  toolButton: { height: 31, justifyContent: "center", paddingHorizontal: 10, borderRadius: 9, backgroundColor: "rgba(11,16,32,0.36)" },
-  toolText: { color: "#CFDBEA", fontSize: 11, lineHeight: 16, fontWeight: "700" },
-  pinButton: { height: 31, justifyContent: "center", paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: "rgba(245,182,75,0.55)" },
-  pinText: { color: "#F8D28D", fontSize: 11, lineHeight: 16, fontWeight: "800" },
-  children: { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(11,16,32,0.20)", padding: 13 },
-  childrenTitle: { color: "#E4EAF3", fontWeight: "800", fontSize: 12, lineHeight: 18, marginBottom: 8 },
-  childRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  childChip: { maxWidth: 120, backgroundColor: "rgba(11,16,32,0.50)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
-  childText: { color: "#DCE7F5", fontSize: 11, lineHeight: 15, fontWeight: "700" },
-  empty: { flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 70 },
-  emptyTitle: { color: "#F6F7FB", fontSize: 19, lineHeight: 26, fontWeight: "800", textAlign: "center" },
-  emptyText: { color: "#9CA7BE", fontSize: 13, lineHeight: 20, textAlign: "center", marginTop: 8, maxWidth: 295 },
-  primaryButton: { height: 44, paddingHorizontal: 17, borderRadius: 12, justifyContent: "center", backgroundColor: "#F5B64B", marginTop: 20 },
-  primaryText: { color: "#11192B", fontSize: 13, fontWeight: "800" },
-  noData: { alignItems: "center", paddingVertical: 52, paddingHorizontal: 26 },
-  noDataTitle: { color: "#E8ECF3", fontSize: 16, lineHeight: 23, fontWeight: "700" },
-  noDataText: { color: "#9CA7BE", fontSize: 13, lineHeight: 20, marginTop: 7, textAlign: "center" },
-  pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] },
+  content: { flexGrow: 1, padding: 18, paddingTop: 25, paddingBottom: 35 },
+  eyebrow: { color: "#F5B64B", letterSpacing: 1.6, fontSize: 10, lineHeight: 15, fontWeight: "900" },
+  heading: { color: "#F7F8FC", fontSize: 30, lineHeight: 39, fontWeight: "900", marginTop: 4 },
+  lead: { color: "#9DA9BC", fontSize: 13, lineHeight: 21, marginTop: 6 },
+  filterSection: { marginTop: 25 },
+  filterTitle: { color: "#EDF1F7", fontSize: 15, lineHeight: 21, fontWeight: "900", marginBottom: 10 },
+  chipList: { gap: 9, paddingRight: 18 },
+  chip: { minHeight: 38, paddingHorizontal: 15, borderRadius: 12, backgroundColor: "#182136", borderWidth: 1, borderColor: "#2E3A55", alignItems: "center", justifyContent: "center" },
+  chipActive: { backgroundColor: "#F5B64B", borderColor: "#F5B64B" },
+  chipText: { color: "#C3CDDC", fontSize: 12, lineHeight: 17, fontWeight: "800" },
+  chipTextActive: { color: "#151923" },
+  summary: { marginTop: 31, borderRadius: 14, backgroundColor: "#151E31", padding: 15 },
+  summaryLabel: { color: "#8090A8", fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  summaryText: { color: "#F0F3F8", fontSize: 15, lineHeight: 22, fontWeight: "800", marginTop: 4 },
+  applyButton: { height: 54, borderRadius: 15, backgroundColor: "#F5B64B", marginTop: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
+  applyText: { color: "#121722", fontSize: 15, lineHeight: 22, fontWeight: "900" },
+  applyArrow: { color: "#121722", fontSize: 27, lineHeight: 28, marginTop: -4 },
+  empty: { flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 80 },
+  emptyTitle: { color: "#F2F4F8", fontSize: 20, lineHeight: 28, fontWeight: "900" },
+  emptyText: { color: "#9CA7BE", maxWidth: 295, textAlign: "center", fontSize: 13, lineHeight: 21, marginTop: 8 },
+  primaryButton: { marginTop: 20, height: 44, paddingHorizontal: 16, borderRadius: 12, backgroundColor: "#F5B64B", justifyContent: "center" },
+  primaryText: { color: "#111925", fontWeight: "900", fontSize: 13 },
+  pressed: { opacity: 0.76, transform: [{ scale: 0.98 }] },
 });
