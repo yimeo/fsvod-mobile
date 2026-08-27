@@ -224,6 +224,16 @@ export function clearWatchHistory(): Promise<void> {
   return AsyncStorage.removeItem(HISTORY_KEY);
 }
 
+export async function clearPlaybackLists(): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys();
+  const playlistKeys = keys.filter((key) => key.startsWith(DETAIL_PREFIX));
+  if (playlistKeys.length) await AsyncStorage.multiRemove(playlistKeys);
+}
+
+export function clearSearches(): Promise<void> {
+  return AsyncStorage.removeItem(SEARCH_KEY);
+}
+
 export async function clearLocalVodData(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
   const cacheKeys = keys.filter((key) => key.startsWith(DETAIL_PREFIX) || key === SEARCH_KEY || key === HISTORY_KEY);

@@ -5,17 +5,19 @@ import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { DEFAULT_LIST_PAGE_SIZE, clearLocalVodData, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, clearPlaybackLists, clearSearches, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
-import { clearCompletedQueueTasks, clearQueueTasks } from "@/lib/download-queue";
+import { clearCompletedQueueTasks } from "@/lib/download-queue";
 import { toChineseNetworkError } from "@/lib/network-error";
 
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number; offlineCount: number; offlineBytes: number }
 
-type CacheClearTarget = "posters" | "history" | "offline" | "video";
+type CacheClearTarget = "playlist" | "searches" | "posters" | "history" | "offline" | "video";
 
 const CACHE_CLEAR_LABELS: Record<CacheClearTarget, string> = {
+  playlist: "播放列表",
+  searches: "搜索记录",
   posters: "海报缓存",
   history: "观看记录",
   offline: "离线剧集",
@@ -45,7 +47,7 @@ export default function SettingsScreen() {
   const activeSourceTone = activeSource?.health === "healthy" ? "healthy" : activeSource?.health === "unhealthy" ? "unhealthy" : "unknown";
   const clearableRecordCount = cache.playbackLists + cache.searches + cache.history + cache.offlineCount;
   const clearableMediaBytes = cache.videoBytes + cache.offlineBytes;
-  const availableClearTargets = ["posters", "history", "offline", "video"] as CacheClearTarget[];
+  const availableClearTargets = ["playlist", "searches", "posters", "history", "offline", "video"] as CacheClearTarget[];
   const isAllClearTargetsSelected = availableClearTargets.every((target) => selectedClearTargets.includes(target));
 
   const loadCacheSummary = useCallback(async () => {
@@ -164,6 +166,8 @@ export default function SettingsScreen() {
     const selectedLabels = selectedClearTargets.map((target) => CACHE_CLEAR_LABELS[target]).join("、");
     setCacheMessage(`正在清理${selectedLabels}…`);
     const tasks = selectedClearTargets.map((target) => {
+      if (target === "playlist") return clearPlaybackLists();
+      if (target === "searches") return clearSearches();
       if (target === "posters") return Promise.all([Promise.resolve().then(() => Image.clearMemoryCache()), Promise.resolve().then(() => Image.clearDiskCache())]);
       if (target === "history") return clearWatchHistory();
       if (target === "offline") return Promise.all([clearOfflineDownloads(), clearCompletedQueueTasks()]);
@@ -229,7 +233,7 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.cacheClearPreview}><Text style={styles.cacheClearPreviewTitle}>清理前预估</Text><Text style={styles.cacheClearPreviewText}>可释放 {formatBytes(clearableMediaBytes)} 的视频与离线缓存，并清除 {clearableRecordCount} 项播放、搜索和观看数据；海报缓存将一并清理。</Text></View>
           <Pressable disabled={isClearingCache} onPress={openCacheClearPanel} style={({ pressed }) => [styles.secondaryButton, isClearingCache && styles.disabled, pressed && styles.pressed]}>{isClearingCache ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#B7D6F7" size="small" /><Text style={styles.secondaryText}>正在清理…</Text></View> : <Text style={styles.secondaryText}>清理本地缓存</Text>}</Pressable>
-          {selectedClearTargets.length ? <View style={styles.clearSelectionPanel}><View style={styles.clearSelectionHeading}><View><Text style={styles.clearSelectionTitle}>选择要清理的内容</Text><Text style={styles.clearSelectionSubtitle}>支持单项、多项或全部勾选</Text></View><Pressable onPress={selectAllClearTargets} style={({ pressed }) => [styles.selectAllButton, pressed && styles.pressed]}><Text style={styles.selectAllText}>{isAllClearTargetsSelected ? "取消全选" : "全选"}</Text></Pressable></View>{availableClearTargets.map((target) => { const checked = selectedClearTargets.includes(target); const meta = target === "posters" ? "保留影片与记录" : target === "history" ? `${cache.history} 条记录` : target === "offline" ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : formatBytes(cache.videoBytes); return <Pressable key={target} onPress={() => toggleClearTarget(target)} style={({ pressed }) => [styles.clearChoice, checked && styles.clearChoiceChecked, pressed && styles.pressed]}><View style={[styles.checkMark, checked && styles.checkMarkChecked]}><Text style={styles.checkMarkText}>{checked ? "✓" : ""}</Text></View><View style={styles.clearChoiceCopy}><Text style={styles.clearChoiceTitle}>{CACHE_CLEAR_LABELS[target]}</Text><Text style={styles.clearChoiceMeta}>{meta}</Text></View></Pressable>; })}<View style={styles.clearSelectionActions}><Pressable onPress={() => setSelectedClearTargets([])} style={({ pressed }) => [styles.clearSelectionCancel, pressed && styles.pressed]}><Text style={styles.clearSelectionCancelText}>取消</Text></Pressable><Pressable disabled={isClearingCache || selectedClearTargets.length === 0} onPress={() => void runSelectedCacheClear()} style={({ pressed }) => [styles.clearSelectionConfirm, (pressed || selectedClearTargets.length === 0) && styles.disabled]}><Text style={styles.clearSelectionConfirmText}>确认清理（{selectedClearTargets.length}）</Text></Pressable></View></View> : null}
+          {selectedClearTargets.length ? <View style={styles.clearSelectionPanel}><View style={styles.clearSelectionHeading}><View><Text style={styles.clearSelectionTitle}>选择要清理的内容</Text><Text style={styles.clearSelectionSubtitle}>支持单项、多项或全部勾选</Text></View><Pressable onPress={selectAllClearTargets} style={({ pressed }) => [styles.selectAllButton, pressed && styles.pressed]}><Text style={styles.selectAllText}>{isAllClearTargetsSelected ? "取消全选" : "全选"}</Text></Pressable></View>{availableClearTargets.map((target) => { const checked = selectedClearTargets.includes(target); const meta = target === "playlist" ? `${cache.playbackLists} 个列表` : target === "searches" ? `${cache.searches} 条记录` : target === "posters" ? "保留影片与记录" : target === "history" ? `${cache.history} 条记录` : target === "offline" ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : formatBytes(cache.videoBytes); return <Pressable key={target} onPress={() => toggleClearTarget(target)} style={({ pressed }) => [styles.clearChoice, checked && styles.clearChoiceChecked, pressed && styles.pressed]}><View style={[styles.checkMark, checked && styles.checkMarkChecked]}><Text style={styles.checkMarkText}>{checked ? "✓" : ""}</Text></View><View style={styles.clearChoiceCopy}><Text style={styles.clearChoiceTitle}>{CACHE_CLEAR_LABELS[target]}</Text><Text style={styles.clearChoiceMeta}>{meta}</Text></View></Pressable>; })}<View style={styles.clearSelectionActions}><Pressable onPress={() => setSelectedClearTargets([])} style={({ pressed }) => [styles.clearSelectionCancel, pressed && styles.pressed]}><Text style={styles.clearSelectionCancelText}>取消</Text></Pressable><Pressable disabled={isClearingCache || selectedClearTargets.length === 0} onPress={() => void runSelectedCacheClear()} style={({ pressed }) => [styles.clearSelectionConfirm, (pressed || selectedClearTargets.length === 0) && styles.disabled]}><Text style={styles.clearSelectionConfirmText}>确认清理（{selectedClearTargets.length}）</Text></Pressable></View></View> : null}
           {cacheMessage ? <Text style={styles.cacheMessage}>{cacheMessage}</Text> : null}
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
         </View>
