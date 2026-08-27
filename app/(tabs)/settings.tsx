@@ -8,7 +8,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { DEFAULT_LIST_PAGE_SIZE, clearLocalVodData, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
-import { clearQueueTasks } from "@/lib/download-queue";
+import { clearCompletedQueueTasks, clearQueueTasks } from "@/lib/download-queue";
 import { toChineseNetworkError } from "@/lib/network-error";
 
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
@@ -28,6 +28,7 @@ export default function SettingsScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [isClearingCache, setIsClearingCache] = useState(false);
+  const [isClearConfirmationPending, setIsClearConfirmationPending] = useState(false);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
   const [categoryPageMode, setCategoryPageMode] = useState<CategoryPageMode>("auto");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
@@ -132,9 +133,14 @@ export default function SettingsScreen() {
     }
   };
 
-  const clearCaches = () => { if (!isClearingCache) void runClearCaches(); };
+  const clearCaches = () => {
+    if (isClearingCache) return;
+    setIsClearConfirmationPending(true);
+    setCacheMessage("将清理全部本地缓存；请在下方再次确认。");
+  };
 
   const runClearCaches = async () => {
+    setIsClearConfirmationPending(false);
     setIsClearingCache(true);
     setCacheMessage("正在清理本地缓存…");
     const results = await Promise.allSettled([
@@ -155,20 +161,23 @@ export default function SettingsScreen() {
     }
   };
 
-  const runSelectiveCacheClear = async (target: "posters" | "history" | "video") => {
+  const runSelectiveCacheClear = async (target: "posters" | "history" | "offline" | "video") => {
     if (isClearingCache) return;
+    setIsClearConfirmationPending(false);
     if (target === "video" && Platform.OS !== "android") {
       setCacheMessage("当前设备没有可单独清理的视频缓存。");
       return;
     }
-    const labels = { posters: "海报缓存", history: "观看记录", video: "视频缓存" } as const;
+    const labels = { posters: "海报缓存", history: "观看记录", offline: "离线剧集", video: "视频缓存" } as const;
     setIsClearingCache(true);
     setCacheMessage(`正在清理${labels[target]}…`);
     const task = target === "posters"
       ? Promise.all([Promise.resolve().then(() => Image.clearMemoryCache()), Promise.resolve().then(() => Image.clearDiskCache())])
       : target === "history"
         ? clearWatchHistory()
-        : Promise.resolve().then(() => clearVideoCacheAsync());
+        : target === "offline"
+          ? Promise.all([clearOfflineDownloads(), clearCompletedQueueTasks()])
+          : Promise.resolve().then(() => clearVideoCacheAsync());
     try {
       await task;
       await loadCacheSummary();
@@ -227,8 +236,9 @@ export default function SettingsScreen() {
             <CacheItem label="离线剧集" value={`${cache.offlineCount} · ${formatBytes(cache.offlineBytes)}`} />
           </View>
           <View style={styles.cacheClearPreview}><Text style={styles.cacheClearPreviewTitle}>清理前预估</Text><Text style={styles.cacheClearPreviewText}>可释放 {formatBytes(clearableMediaBytes)} 的视频与离线缓存，并清除 {clearableRecordCount} 项播放、搜索和观看数据；海报缓存将一并清理。</Text></View>
-          <View style={styles.selectiveClearActions}><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("posters")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理海报</Text><Text style={styles.selectiveClearMeta}>保留影片与记录</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("history")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理观看记录</Text><Text style={styles.selectiveClearMeta}>{cache.history} 条记录</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("video")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理视频缓存</Text><Text style={styles.selectiveClearMeta}>{cache.videoBytes === null ? "当前设备不可用" : formatBytes(cache.videoBytes)}</Text></Pressable></View>
-          <Pressable disabled={isClearingCache} onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, isClearingCache && styles.disabled, pressed && styles.pressed]}>{isClearingCache ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#B7D6F7" size="small" /><Text style={styles.secondaryText}>正在清理…</Text></View> : <Text style={styles.secondaryText}>清理本地缓存</Text>}</Pressable>
+          <View style={styles.selectiveClearActions}><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("posters")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理海报</Text><Text style={styles.selectiveClearMeta}>保留影片与记录</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("history")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理观看记录</Text><Text style={styles.selectiveClearMeta}>{cache.history} 条记录</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("offline")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理离线剧集</Text><Text style={styles.selectiveClearMeta}>{cache.offlineCount} 集 · {formatBytes(cache.offlineBytes)}</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("video")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理视频缓存</Text><Text style={styles.selectiveClearMeta}>{cache.videoBytes === null ? "当前设备不可用" : formatBytes(cache.videoBytes)}</Text></Pressable></View>
+          <Pressable disabled={isClearingCache} onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, isClearingCache && styles.disabled, pressed && styles.pressed]}>{isClearingCache ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#B7D6F7" size="small" /><Text style={styles.secondaryText}>正在清理…</Text></View> : <Text style={styles.secondaryText}>{isClearConfirmationPending ? "请在下方确认" : "清理本地缓存"}</Text>}</Pressable>
+          {isClearConfirmationPending ? <View style={styles.clearConfirmation}><Text style={styles.clearConfirmationText}>确认后将清理播放列表、搜索记录、观看记录、海报、离线剧集和视频缓存。</Text><View style={styles.clearConfirmationActions}><Pressable onPress={() => setIsClearConfirmationPending(false)} style={({ pressed }) => [styles.clearConfirmationCancel, pressed && styles.pressed]}><Text style={styles.clearConfirmationCancelText}>取消</Text></Pressable><Pressable onPress={() => void runClearCaches()} style={({ pressed }) => [styles.clearConfirmationConfirm, pressed && styles.pressed]}><Text style={styles.clearConfirmationConfirmText}>确认清理</Text></Pressable></View></View> : null}
           {cacheMessage ? <Text style={styles.cacheMessage}>{cacheMessage}</Text> : null}
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
         </View>
@@ -366,6 +376,13 @@ const styles = StyleSheet.create({
   selectiveClearTitle: { color: "#DCE7F5", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   selectiveClearMeta: { color: "#8495AC", fontSize: 10, lineHeight: 15, textAlign: "right" },
   secondaryButton: { borderWidth: 1, borderColor: "#48648D", height: 42, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 14 },
+  clearConfirmation: { marginTop: 9, padding: 10, borderRadius: 10, backgroundColor: "#35262B", borderWidth: 1, borderColor: "#85515D" },
+  clearConfirmationText: { color: "#E7BBC1", fontSize: 10, lineHeight: 16 },
+  clearConfirmationActions: { flexDirection: "row", justifyContent: "flex-end", gap: 9, marginTop: 9 },
+  clearConfirmationCancel: { height: 30, paddingHorizontal: 10, borderRadius: 8, justifyContent: "center", borderWidth: 1, borderColor: "#785261" },
+  clearConfirmationCancelText: { color: "#D6B9C0", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  clearConfirmationConfirm: { height: 30, paddingHorizontal: 10, borderRadius: 8, justifyContent: "center", backgroundColor: "#E17C72" },
+  clearConfirmationConfirmText: { color: "#261419", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   clearingButtonContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   secondaryText: { color: "#B7D6F7", fontWeight: "700", fontSize: 13 },
   cacheMessage: { color: "#A9E2BE", fontSize: 11, lineHeight: 17, marginTop: 8, fontWeight: "700" },

@@ -86,6 +86,11 @@ export function clearQueueTasks(): Promise<void> {
   return AsyncStorage.removeItem(TASKS_KEY);
 }
 
+export async function clearCompletedQueueTasks(): Promise<void> {
+  const remaining = (await getQueueTasks()).filter((task) => task.status !== "completed");
+  await saveQueueTasks(remaining);
+}
+
 export async function getDownloadSettings(): Promise<DownloadSettings> {
   const stored = await getJson<Partial<DownloadSettings>>(SETTINGS_KEY, {});
   return { ...DEFAULT_DOWNLOAD_SETTINGS, ...stored };
