@@ -30,9 +30,8 @@ const env = {
   // App branding - update these values directly (do not use env vars)
   appName: "飞鸿影院",
   appSlug: "fsvod-mobile",
-  // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
-  // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://8081-iqwonwej9r8kim06ykrg8-4113f88b.us3.manus.computer/manus-storage/fsvod-icon-refined_002017fa.png",
+  // 稳定的项目品牌图标地址，同时保留本地 assets/images/icon.png 供原生应用打包。
+  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663815862054/BClYwvJZGWDzQYXL.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
