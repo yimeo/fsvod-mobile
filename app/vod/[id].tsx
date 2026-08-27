@@ -15,7 +15,7 @@ export default function VodDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
-  const { endpoint } = useVodSource();
+  const { endpoint, sources } = useVodSource();
   const { enqueue, retry, resumeTask, tasks, isWifi, settings } = useDownloadQueue();
   const [detail, setDetail] = useState<MacCmsVodDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,6 +46,9 @@ export default function VodDetailScreen() {
   const firstEpisode = source?.episodes[0];
   const downloadedEpisodeCount = source?.episodes.filter((item) => Boolean(downloads[item.url])).length ?? 0;
   const metadata = detail ? [detail.year, detail.area, detail.language].filter(Boolean).join(" · ") : "";
+  const currentSource = sources.find((item) => item.id === endpoint?.apiUrl);
+  const sourceCaption = currentSource?.displayName?.trim() || endpoint?.inputDomain || "";
+  const sourceConnectionTone = currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
 
   const play = async (episodeName: string, url: string) => {
     if (!detail || !source) return;
@@ -65,7 +68,7 @@ export default function VodDetailScreen() {
   if (!detail) return <View style={styles.page}><ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>无法加载影片</Text><Text style={styles.errorText}>{error ?? "影片不存在或已被删除"}</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回</Text></Pressable></ScreenContainer><GlobalBottomNavigation /></View>;
 
   return <View style={styles.page}><ScreenContainer containerClassName="bg-background"><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><Text style={styles.topBrand}>飞鸿影院</Text></View>
+    <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text>{sourceCaption ? <><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></> : null}</View></View>
     <VodPoster title={detail.name} url={detail.posterUrl} style={styles.heroPoster} />
     <Text style={styles.title}>{detail.name}</Text>
     <Text style={styles.metadata}>{metadata || detail.typeName || "影视"}</Text>
@@ -84,7 +87,12 @@ const styles = StyleSheet.create({
   topBar: { height: 54, flexDirection: "row", alignItems: "center" },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#20293A", alignItems: "center", justifyContent: "center" },
   backLabel: { color: "#F2F4F8", fontWeight: "500", fontSize: 39, lineHeight: 41, marginTop: -5 },
-  topBrand: { color: "#A5B0C1", fontSize: 12, lineHeight: 18, fontWeight: "800", marginLeft: 10 },
+  headerIdentity: { flex: 1, minWidth: 0, marginLeft: 10, flexDirection: "row", alignItems: "center", gap: 7 },
+  topBrand: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
+  sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
+  sourceConnectionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#77869D", flexShrink: 0 },
+  sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
+  sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
   heroPoster: { width: "100%", height: 280, borderRadius: 23, marginTop: 10 },
   title: { color: "#F5F6F9", fontSize: 29, lineHeight: 38, fontWeight: "900", marginTop: 21 },
   metadata: { color: "#A3AEBD", fontSize: 13, lineHeight: 19, marginTop: 6 },
