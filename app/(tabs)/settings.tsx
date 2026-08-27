@@ -14,12 +14,14 @@ import { clearQueueTasks, formatStorageLimit } from "@/lib/download-queue";
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
 export default function SettingsScreen() {
-  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, sourceError } = useVodSource();
+  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, renameSource, reorderSource, sourceError } = useVodSource();
   const { tasks, settings, isWifi } = useDownloadQueue();
   const router = useRouter();
   const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
+  const [sourceDisplayName, setSourceDisplayName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
 
@@ -56,10 +58,21 @@ export default function SettingsScreen() {
   };
 
   const confirmDeleteSource = (source: SavedMacCmsSource) => {
-    Alert.alert("删除数据源", `确定删除 ${source.endpoint.inputDomain} 吗？`, [
+    Alert.alert("删除数据源", `确定删除 ${source.displayName} 吗？`, [
       { text: "取消", style: "cancel" },
       { text: "删除", style: "destructive", onPress: () => { void deleteSource(source.id); } },
     ]);
+  };
+
+  const beginRename = (source: SavedMacCmsSource) => {
+    setEditingSourceId(source.id);
+    setSourceDisplayName(source.displayName);
+  };
+
+  const saveSourceName = async (id: string) => {
+    await renameSource(id, sourceDisplayName);
+    setEditingSourceId(null);
+    setMessage("数据源名称已保存。");
   };
 
   const clearCaches = () => {
@@ -104,7 +117,30 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.section}>
           <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>已保存数据源</Text><Text style={styles.sourceIntro}>点按名称即可切换，检测可更新连接状态。</Text></View><Text style={styles.sourceCount}>{sources.length} 个</Text></View>
-          {sources.length ? sources.map((source) => <View key={source.id} style={[styles.sourceItem, endpoint?.apiUrl === source.id && styles.sourceItemActive]}><Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}><View style={[styles.healthDot, source.health === "healthy" ? styles.healthGood : source.health === "unhealthy" ? styles.healthBad : styles.healthUnknown]} /><View style={styles.sourceInfo}><Text numberOfLines={1} style={styles.sourceName}>{source.endpoint.inputDomain}</Text><Text numberOfLines={1} style={styles.sourceMeta}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>{endpoint?.apiUrl === source.id ? <Text style={styles.currentTag}>当前</Text> : null}</Pressable><View style={styles.sourceActions}><Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id} style={({ pressed }) => [styles.miniAction, (pressed || checkingId === source.id) && styles.pressed]}>{checkingId === source.id ? <ActivityIndicator color="#B7D6F7" size="small" /> : <Text style={styles.miniActionText}>检测</Text>}</Pressable><Pressable onPress={() => confirmDeleteSource(source)} style={({ pressed }) => [styles.miniAction, styles.removeAction, pressed && styles.pressed]}><Text style={styles.removeActionText}>删除</Text></Pressable></View></View>) : <Text style={styles.meta}>尚未配置数据源</Text>}
+          {sources.length ? sources.map((source, index) => (
+            <View key={source.id} style={[styles.sourceItem, endpoint?.apiUrl === source.id && styles.sourceItemActive]}>
+              {editingSourceId === source.id ? (
+                <View style={styles.renameRow}>
+                  <TextInput value={sourceDisplayName} onChangeText={setSourceDisplayName} autoFocus returnKeyType="done" onSubmitEditing={() => void saveSourceName(source.id)} placeholder="数据源名称" placeholderTextColor="#71809B" style={styles.renameInput} />
+                  <Pressable onPress={() => void saveSourceName(source.id)} style={({ pressed }) => [styles.renameSave, pressed && styles.pressed]}><Text style={styles.renameSaveText}>保存</Text></Pressable>
+                  <Pressable onPress={() => setEditingSourceId(null)} style={({ pressed }) => [styles.renameCancel, pressed && styles.pressed]}><Text style={styles.miniActionText}>取消</Text></Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
+                  <View style={[styles.healthDot, source.health === "healthy" ? styles.healthGood : source.health === "unhealthy" ? styles.healthBad : styles.healthUnknown]} />
+                  <View style={styles.sourceInfo}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text numberOfLines={1} style={styles.sourceMeta}>{source.endpoint.inputDomain} · {source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                  {endpoint?.apiUrl === source.id ? <Text style={styles.currentTag}>当前</Text> : null}
+                </Pressable>
+              )}
+              <View style={styles.sourceActions}>
+                <Pressable onPress={() => beginRename(source)} style={({ pressed }) => [styles.miniAction, pressed && styles.pressed]}><Text style={styles.miniActionText}>改名</Text></Pressable>
+                <Pressable onPress={() => void reorderSource(source.id, -1)} disabled={index === 0} style={({ pressed }) => [styles.miniAction, index === 0 && styles.disabled, pressed && styles.pressed]}><Text style={styles.miniActionText}>上移</Text></Pressable>
+                <Pressable onPress={() => void reorderSource(source.id, 1)} disabled={index === sources.length - 1} style={({ pressed }) => [styles.miniAction, index === sources.length - 1 && styles.disabled, pressed && styles.pressed]}><Text style={styles.miniActionText}>下移</Text></Pressable>
+                <Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id} style={({ pressed }) => [styles.miniAction, (pressed || checkingId === source.id) && styles.pressed]}>{checkingId === source.id ? <ActivityIndicator color="#B7D6F7" size="small" /> : <Text style={styles.miniActionText}>检测</Text>}</Pressable>
+                <Pressable onPress={() => confirmDeleteSource(source)} style={({ pressed }) => [styles.miniAction, styles.removeAction, pressed && styles.pressed]}><Text style={styles.removeActionText}>删除</Text></Pressable>
+              </View>
+            </View>
+          )) : <Text style={styles.meta}>尚未配置数据源</Text>}
           {endpoint ? <><Text numberOfLines={1} style={styles.endpoint}>{endpoint.apiUrl}</Text><Text style={styles.meta}>当前已识别 {categories.length} 个一级分类</Text></> : null}
         </View>
         <View style={styles.section}>
@@ -166,6 +202,11 @@ const styles = StyleSheet.create({
   sourceInfo: { flex: 1, minWidth: 0 },
   sourceName: { color: "#EEF2F8", fontSize: 13, lineHeight: 19, fontWeight: "800" },
   sourceMeta: { color: "#8E9CB0", fontSize: 10, lineHeight: 15, marginTop: 1 },
+  renameRow: { flexDirection: "row", gap: 7, alignItems: "center" },
+  renameInput: { flex: 1, height: 34, borderRadius: 8, borderWidth: 1, borderColor: "#536B92", color: "#F6F7FB", backgroundColor: "#0B1221", fontSize: 12, paddingHorizontal: 9, paddingVertical: 0 },
+  renameSave: { height: 30, paddingHorizontal: 9, borderRadius: 7, justifyContent: "center", backgroundColor: "#F5B64B" },
+  renameSaveText: { color: "#10182B", fontSize: 10, fontWeight: "900" },
+  renameCancel: { height: 30, paddingHorizontal: 8, borderWidth: 1, borderColor: "#3D5577", borderRadius: 7, justifyContent: "center" },
   currentTag: { color: "#11192B", fontSize: 10, fontWeight: "900", backgroundColor: "#F5B64B", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
   sourceActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 9 },
   miniAction: { minWidth: 48, height: 27, paddingHorizontal: 9, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#3D5577", borderRadius: 7 },

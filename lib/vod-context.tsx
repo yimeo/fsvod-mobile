@@ -7,7 +7,7 @@ import {
   type MacCmsCategory,
   type MacCmsEndpoint,
 } from "@/lib/maccms";
-import { clearEndpoint, getEndpoint, getSources, removeSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
 
 interface VodContextValue {
   endpoint: MacCmsEndpoint | null;
@@ -19,6 +19,8 @@ interface VodContextValue {
   switchSource: (id: string) => Promise<void>;
   deleteSource: (id: string) => Promise<void>;
   checkSource: (id: string) => Promise<void>;
+  renameSource: (id: string, displayName: string) => Promise<void>;
+  reorderSource: (id: string, direction: -1 | 1) => Promise<void>;
   refreshCategories: () => Promise<void>;
 }
 
@@ -120,8 +122,16 @@ export function VodProvider({ children }: { children: ReactNode }) {
     }
   }, [endpoint?.apiUrl]);
 
+  const renameSavedSource = useCallback(async (id: string, displayName: string) => {
+    setSources(await renameSource(id, displayName));
+  }, []);
+
+  const reorderSource = useCallback(async (id: string, direction: -1 | 1) => {
+    setSources(await moveSource(id, direction));
+  }, []);
+
   return (
-    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, refreshCategories }}>
+    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, reorderSource, refreshCategories }}>
       {children}
     </VodContext.Provider>
   );

@@ -24,6 +24,7 @@ export type SourceHealth = "unknown" | "healthy" | "unhealthy";
 export interface SavedMacCmsSource {
   id: string;
   endpoint: MacCmsEndpoint;
+  displayName: string;
   health: SourceHealth;
   lastCheckedAt: string | null;
   lastError: string | null;
@@ -56,10 +57,14 @@ function sourceId(endpoint: MacCmsEndpoint): string {
 
 export async function getSources(): Promise<SavedMacCmsSource[]> {
   const saved = await getJson<SavedMacCmsSource[]>(SOURCES_KEY, []);
-  if (saved.length) return saved;
+  if (saved.length) {
+    const normalized = saved.map((source) => ({ ...source, displayName: source.displayName?.trim() || source.endpoint.inputDomain }));
+    if (normalized.some((source, index) => source.displayName !== saved[index]?.displayName)) await saveSources(normalized);
+    return normalized;
+  }
   const legacy = await getEndpoint();
   if (!legacy) return [];
-  const migrated: SavedMacCmsSource[] = [{ id: sourceId(legacy), endpoint: legacy, health: "unknown", lastCheckedAt: null, lastError: null }];
+  const migrated: SavedMacCmsSource[] = [{ id: sourceId(legacy), endpoint: legacy, displayName: legacy.inputDomain, health: "unknown", lastCheckedAt: null, lastError: null }];
   await AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(migrated));
   return migrated;
 }
@@ -70,7 +75,8 @@ export function saveSources(sources: SavedMacCmsSource[]): Promise<void> {
 
 export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null): Promise<SavedMacCmsSource[]> {
   const sources = await getSources();
-  const entry: SavedMacCmsSource = { id: sourceId(endpoint), endpoint, health, lastCheckedAt: new Date().toISOString(), lastError };
+  const current = sources.find((source) => source.id === sourceId(endpoint));
+  const entry: SavedMacCmsSource = { id: sourceId(endpoint), endpoint, displayName: current?.displayName ?? endpoint.inputDomain, health, lastCheckedAt: new Date().toISOString(), lastError };
   const next = [entry, ...sources.filter((source) => source.id !== entry.id)];
   await saveSources(next);
   return next;
@@ -84,6 +90,23 @@ export async function updateSourceHealth(id: string, health: SourceHealth, lastE
 
 export async function removeSource(id: string): Promise<SavedMacCmsSource[]> {
   const next = (await getSources()).filter((source) => source.id !== id);
+  await saveSources(next);
+  return next;
+}
+
+export async function renameSource(id: string, displayName: string): Promise<SavedMacCmsSource[]> {
+  const name = displayName.trim();
+  const next = (await getSources()).map((source) => source.id === id ? { ...source, displayName: name || source.endpoint.inputDomain } : source);
+  await saveSources(next);
+  return next;
+}
+
+export async function moveSource(id: string, direction: -1 | 1): Promise<SavedMacCmsSource[]> {
+  const next = [...await getSources()];
+  const from = next.findIndex((source) => source.id === id);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= next.length) return next;
+  [next[from], next[to]] = [next[to], next[from]];
   await saveSources(next);
   return next;
 }

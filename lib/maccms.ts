@@ -24,6 +24,7 @@ export interface MacCmsVod {
   thumbnailUrl: string | null;
   posterUrl: string | null;
   updateTime: string;
+  hotScore: number;
 }
 
 export interface MacCmsEpisode {
@@ -176,6 +177,7 @@ function mapVod(value: unknown, apiUrl: string): MacCmsVod | null {
     thumbnailUrl: resolveUrl(firstNonEmpty(value.vod_pic_thumb, value.vod_pic_slide, value.vod_pic, value.pic_thumb, value.pic), apiUrl),
     posterUrl: resolveUrl(firstNonEmpty(value.vod_pic, value.vod_pic_slide, value.vod_pic_url, value.vod_pic_thumb, value.pic, value.pic_url, value.cover), apiUrl),
     updateTime: text(value.vod_time ?? value.last),
+    hotScore: Math.max(numeric(value.vod_hits), numeric(value.vod_hits_month), numeric(value.vod_hits_week), numeric(value.vod_hits_day), numeric(value.hits)),
   };
 }
 
@@ -263,7 +265,7 @@ export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog
 
 export async function fetchVodPage(
   endpoint: MacCmsEndpoint,
-  options: { page?: number; typeId?: string; keyword?: string; area?: string; year?: string },
+  options: { page?: number; typeId?: string; keyword?: string; area?: string; year?: string; sort?: "latest" | "hot" },
 ): Promise<MacCmsPage> {
   const payload = await getJson(
     addQuery(endpoint.apiUrl, {
@@ -273,10 +275,21 @@ export async function fetchVodPage(
       wd: options.keyword,
       area: options.area,
       year: options.year,
+      by: options.sort === "hot" ? "hits" : "time",
       pagesize: 20,
     }),
   );
   return parseMacCmsPage(payload, endpoint.apiUrl);
+}
+
+export function sortVodItems(items: MacCmsVod[], sort: "latest" | "hot"): MacCmsVod[] {
+  return [...items].sort((left, right) => {
+    if (sort === "hot") {
+      const scoreDifference = right.hotScore - left.hotScore;
+      if (scoreDifference !== 0) return scoreDifference;
+    }
+    return right.updateTime.localeCompare(left.updateTime);
+  });
 }
 
 export function mergeMacCmsPages(pages: MacCmsPage[]): MacCmsPage {
@@ -284,7 +297,7 @@ export function mergeMacCmsPages(pages: MacCmsPage[]): MacCmsPage {
   const uniqueItems = new Map<string, MacCmsVod>();
   pages.forEach((page) => page.items.forEach((item) => uniqueItems.set(item.id, item)));
   return {
-    items: [...uniqueItems.values()].sort((left, right) => right.updateTime.localeCompare(left.updateTime)),
+    items: sortVodItems([...uniqueItems.values()], "latest"),
     page: pages[0].page,
     pageCount: Math.max(...pages.map((page) => page.pageCount)),
     total: pages.reduce((sum, page) => sum + page.total, 0),

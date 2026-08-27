@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { VodPoster } from "@/components/vod-poster";
-import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
+import { fetchVodPage, mergeMacCmsPages, sortVodItems, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
 import { getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
@@ -13,12 +13,13 @@ const ALL_CATEGORY: MacCmsCategory = { id: "all", name: "全部", parentId: null
 
 export default function HomeScreen() {
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{ typeId?: string; area?: string; year?: string }>();
+  const routeParams = useLocalSearchParams<{ typeId?: string; area?: string; year?: string; sort?: string }>();
   const { endpoint, categories, isBooting, sourceError, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("all");
   const [activeTypeId, setActiveTypeId] = useState<string | undefined>();
   const [activeArea, setActiveArea] = useState<string | undefined>();
   const [activeYear, setActiveYear] = useState<string | undefined>();
+  const [sortMode, setSortMode] = useState<"latest" | "hot">("latest");
   const [items, setItems] = useState<MacCmsVod[]>([]);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
@@ -39,6 +40,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
+    const routeSort = Array.isArray(routeParams.sort) ? routeParams.sort[0] : routeParams.sort;
+    setSortMode(routeSort === "hot" ? "hot" : "latest");
     if (!targetTypeId) return;
     const root = categories.find((category) => category.id === targetTypeId) ?? categories.find((category) => category.children.some((child) => child.id === targetTypeId));
     if (!root) return;
@@ -48,7 +51,7 @@ export default function HomeScreen() {
     const year = Array.isArray(routeParams.year) ? routeParams.year[0] : routeParams.year;
     setActiveArea(area || undefined);
     setActiveYear(year || undefined);
-  }, [categories, routeParams.area, routeParams.typeId, routeParams.year]);
+  }, [categories, routeParams.area, routeParams.sort, routeParams.typeId, routeParams.year]);
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint) return;
@@ -57,9 +60,9 @@ export default function HomeScreen() {
     try {
       const shouldAggregateChildren = activeRootId !== "all" && activeTypeId === selectedRoot.id && selectedRoot.children.length > 0;
       const result = shouldAggregateChildren
-        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id, area: activeArea, year: activeYear }))))
-        : await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId, area: activeArea, year: activeYear });
-      setItems((current) => append ? [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))] : result.items);
+        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id, area: activeArea, year: activeYear, sort: sortMode }))))
+        : await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId, area: activeArea, year: activeYear, sort: sortMode });
+      setItems((current) => sortVodItems(append ? [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))] : result.items, sortMode));
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
@@ -67,7 +70,7 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeArea, activeRootId, activeTypeId, activeYear, endpoint, selectedRoot]);
+  }, [activeArea, activeRootId, activeTypeId, activeYear, endpoint, selectedRoot, sortMode]);
 
   useEffect(() => { if (endpoint) void loadPage(1); }, [endpoint, activeTypeId, loadPage]);
 
@@ -89,7 +92,7 @@ export default function HomeScreen() {
 
   const latestHistory = history[0];
   const featuredType = categories[0]?.id ?? "all";
-  const weeklyPopular = useMemo(() => items.slice(0, 5), [items]);
+  const weeklyPopular = useMemo(() => sortVodItems(items, "hot").slice(0, 5), [items]);
   const sectionTitle = `${activeTypeId === selectedRoot.id && selectedRoot.children.length > 0 ? `${selectedRoot.name} · 全部内容` : activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name}${activeArea ? ` · ${activeArea}` : ""}${activeYear ? ` · ${activeYear}` : ""}`;
 
   const renderHeader = () => <View>
@@ -99,7 +102,7 @@ export default function HomeScreen() {
     {childCategoryChoices.length > 0 ? <FlatList horizontal data={childCategoryChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subcategoryList} renderItem={({ item }) => <CategoryChip label={item.name} compact active={activeTypeId === item.id} onPress={() => chooseChild(item.id)} />} /> : null}
     {latestHistory ? <View style={styles.continueSection}><Text style={styles.sectionTitle}>观看记录</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text><Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: latestHistory.id } } as never)} style={({ pressed }) => [styles.continueCard, pressed && styles.buttonPressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text style={styles.continueMeta}>{latestHistory.sourceName} · {latestHistory.episodeName}</Text><View style={styles.continueLine}><View style={styles.continueProgress} /></View></View></Pressable></View> : null}
     {history.length > 1 ? <View style={styles.playlistSection}><View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>播放列表</Text><Text style={styles.sectionSubtitle}>最近加入的播放记录</Text></View></View><FlatList horizontal data={history.slice(1, 5)} keyExtractor={(item) => `playlist-${item.id}-${item.episodeName}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistList} renderItem={({ item }) => <Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: item.id } } as never)} style={({ pressed }) => [styles.playlistItem, pressed && styles.buttonPressed]}><VodPoster title={item.name} url={item.posterUrl} style={styles.playlistPoster} /><Text numberOfLines={1} style={styles.playlistName}>{item.name}</Text><Text numberOfLines={1} style={styles.playlistEpisode}>{item.episodeName}</Text></Pressable>} /></View> : null}
-    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>{sectionTitle} · 来自当前数据源的更新内容</Text></View><Pressable onPress={() => chooseRoot("all")} style={({ pressed }) => [styles.moreButton, pressed && styles.buttonPressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
+    <View style={styles.contentHeading}><View style={styles.contentHeadingCopy}><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>{sectionTitle} · 来自当前数据源的更新内容</Text></View><View style={styles.sortActions}><SortButton label="最新" active={sortMode === "latest"} onPress={() => setSortMode("latest")} /><SortButton label="热度" active={sortMode === "hot"} onPress={() => setSortMode("hot")} /></View></View>
     {sourceError ? <Text style={styles.warning}>{sourceError}</Text> : null}{loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
 
@@ -108,6 +111,10 @@ export default function HomeScreen() {
 
 function CategoryChip({ label, active, compact = false, onPress }: { label: string; active: boolean; compact?: boolean; onPress: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, compact && styles.chipCompact, active && styles.chipActive, pressed && styles.buttonPressed]}><Text style={[styles.chipText, compact && styles.chipTextCompact, active && styles.chipTextActive]}>{label}</Text></Pressable>;
+}
+
+function SortButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.sortButton, active && styles.sortButtonActive, pressed && styles.buttonPressed]}><Text style={[styles.sortButtonText, active && styles.sortButtonTextActive]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
@@ -165,6 +172,12 @@ const styles = StyleSheet.create({
   playlistName: { color: "#EAEFF7", fontSize: 12, lineHeight: 18, fontWeight: "800", marginTop: 7 },
   playlistEpisode: { color: "#9CA9BC", fontSize: 11, lineHeight: 16, marginTop: 1 },
   contentHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingBottom: 15 },
+  contentHeadingCopy: { flex: 1, minWidth: 0, paddingRight: 8 },
+  sortActions: { flexDirection: "row", gap: 5, alignItems: "center" },
+  sortButton: { height: 30, paddingHorizontal: 9, justifyContent: "center", borderRadius: 9, borderWidth: 1, borderColor: "#43516A", backgroundColor: "#171F31" },
+  sortButtonActive: { borderColor: "#F5B64B", backgroundColor: "#F5B64B" },
+  sortButtonText: { color: "#B2C0D4", fontSize: 11, lineHeight: 15, fontWeight: "800" },
+  sortButtonTextActive: { color: "#151821" },
   moreButton: { paddingVertical: 4, paddingLeft: 12 },
   moreText: { color: "#F5B64B", fontSize: 13, lineHeight: 19, fontWeight: "900" },
   warning: { color: "#F8C174", fontSize: 12, lineHeight: 18, backgroundColor: "#2B2630", padding: 10, borderRadius: 10, marginBottom: 12 },

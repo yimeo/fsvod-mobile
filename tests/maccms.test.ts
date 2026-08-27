@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCategoryTree, mergeMacCmsPages, parseMacCmsPage, parsePlaySources } from "../lib/maccms";
+import { buildCategoryTree, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, sortVodItems } from "../lib/maccms";
 
 describe("MACCMS 数据适配", () => {
   const endpoint = "https://video.example.com/api.php/provide/vod/";
@@ -91,5 +91,19 @@ describe("MACCMS 数据适配", () => {
     expect(combined.total).toBe(4);
     expect(combined.pageCount).toBe(3);
     expect(combined.items.map((item) => item.id)).toEqual(["3", "2", "1"]);
+  });
+
+  it("按热度排序并在热度相同时按更新时间回退", () => {
+    const page = parseMacCmsPage({
+      code: 1,
+      list: [
+        { vod_id: 1, vod_name: "低热度", vod_hits: 10, vod_time: "2026-01-03" },
+        { vod_id: 2, vod_name: "高热度较早", vod_hits_week: 90, vod_time: "2026-01-01" },
+        { vod_id: 3, vod_name: "高热度较新", vod_hits: 90, vod_time: "2026-01-04" },
+      ],
+    }, endpoint);
+
+    expect(page.items.map((item) => item.hotScore)).toEqual([10, 90, 90]);
+    expect(sortVodItems(page.items, "hot").map((item) => item.id)).toEqual(["3", "2", "1"]);
   });
 });
