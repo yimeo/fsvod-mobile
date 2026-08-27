@@ -14,6 +14,7 @@ const CATEGORY_CLASSIC_PAGE_SIZE_KEY = `${PREFIX}category-classic-page-size`;
 
 export type CategoryPageMode = "auto" | "manual" | "classic";
 export type CategoryClassicPageSize = 10 | 20 | 30 | 50;
+export const DEFAULT_LIST_PAGE_SIZE: CategoryClassicPageSize = 30;
 
 export interface WatchHistoryEntry {
   id: string;
@@ -196,8 +197,8 @@ export function saveCategoryPageMode(mode: CategoryPageMode): Promise<void> {
 }
 
 export async function getCategoryClassicPageSize(): Promise<CategoryClassicPageSize> {
-  const size = await getJson<number>(CATEGORY_CLASSIC_PAGE_SIZE_KEY, 20);
-  return size === 10 || size === 30 || size === 50 ? size : 20;
+  const size = await getJson<number>(CATEGORY_CLASSIC_PAGE_SIZE_KEY, DEFAULT_LIST_PAGE_SIZE);
+  return size === 10 || size === 20 || size === 30 || size === 50 ? size : DEFAULT_LIST_PAGE_SIZE;
 }
 
 export function saveCategoryClassicPageSize(size: CategoryClassicPageSize): Promise<void> {

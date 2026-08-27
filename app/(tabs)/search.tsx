@@ -6,7 +6,7 @@ import { useCallback, useRef, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, type MacCmsVod } from "@/lib/maccms";
-import { getCategoryClassicPageSize, getCategoryPageMode, rememberSearch, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, rememberSearch, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 export default function SearchScreen() {
@@ -20,7 +20,7 @@ export default function SearchScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageMode, setPageMode] = useState<CategoryPageMode>("manual");
-  const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(20);
+  const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
 
   useFocusEffect(useCallback(() => {
@@ -35,7 +35,7 @@ export default function SearchScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      const pageSize = pageMode === "classic" ? classicPageSize : 20;
+      const pageSize = pageMode === "classic" ? classicPageSize : DEFAULT_LIST_PAGE_SIZE;
       const result = await fetchVodPage(endpoint, { page: requestedPage, pageSize, keyword });
       const pageItems = result.items.slice(0, pageSize);
       setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
@@ -80,7 +80,7 @@ export default function SearchScreen() {
           : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View>
         : items.length ? <Text style={styles.endText}>已经到底了</Text> : null;
 
-  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={2} key="search-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} columnWrapperStyle={items.length ? styles.gridRow : undefined} contentContainerStyle={styles.content} ListHeaderComponent={listHeader} ListEmptyComponent={isLoading ? <View style={styles.loading}><ActivityIndicator color="#F5B64B" size="large" /></View> : submittedQuery ? <View style={styles.empty}><Text style={styles.emptyTitle}>没有找到相关影片</Text><Text style={styles.emptyText}>尝试缩短关键词，或检查数据源的搜索能力。</Text></View> : <View style={styles.empty}><Text style={styles.emptyTitle}>开始搜索</Text><Text style={styles.emptyText}>输入片名、演员或你感兴趣的内容。</Text></View>} ListFooterComponent={footer} onEndReached={() => { if (pageMode === "auto" && submittedQuery && !isLoading && page < pageCount) void loadPage(submittedQuery, page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
+  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={3} key="search-grid-3" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} columnWrapperStyle={items.length ? styles.gridRow : undefined} contentContainerStyle={styles.content} ListHeaderComponent={listHeader} ListEmptyComponent={isLoading ? <View style={styles.loading}><ActivityIndicator color="#F5B64B" size="large" /></View> : submittedQuery ? <View style={styles.empty}><Text style={styles.emptyTitle}>没有找到相关影片</Text><Text style={styles.emptyText}>尝试缩短关键词，或检查数据源的搜索能力。</Text></View> : <View style={styles.empty}><Text style={styles.emptyTitle}>开始搜索</Text><Text style={styles.emptyText}>输入片名、演员或你感兴趣的内容。</Text></View>} ListFooterComponent={footer} onEndReached={() => { if (pageMode === "auto" && submittedQuery && !isLoading && page < pageCount) void loadPage(submittedQuery, page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
 }
 
 function ClassicPager({ page, pageCount, onChange }: { page: number; pageCount: number; onChange: (page: number) => void }) {
@@ -107,8 +107,8 @@ const styles = StyleSheet.create({
   hint: { color: "#9CA7BE", fontSize: 12, lineHeight: 18, marginTop: 12, marginBottom: 18 },
   resultText: { color: "#C9D1E1", fontSize: 13, lineHeight: 19, marginTop: 13, marginBottom: 18 },
   error: { color: "#F8C174", fontSize: 12, lineHeight: 18, marginTop: 10 },
-  gridRow: { gap: 13 },
-  gridCell: { flex: 1, maxWidth: "50%" },
+  gridRow: { gap: 12 },
+  gridCell: { flex: 1, maxWidth: "33.34%" },
   loading: { paddingVertical: 45, alignItems: "center" },
   footer: { paddingVertical: 20, alignItems: "center" },
   loadMore: { alignSelf: "center", height: 40, paddingHorizontal: 18, justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "#334157", backgroundColor: "#171F2D", marginBottom: 14 },

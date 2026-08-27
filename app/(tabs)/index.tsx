@@ -7,11 +7,11 @@ import { VodCard } from "@/components/vod-card";
 import { VodPoster } from "@/components/vod-poster";
 import { buildHistoryPlaybackParams } from "@/lib/history-playback";
 import { fetchVodPage, mergeMacCmsPages, sortVodItems, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
-import { getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
-const HOME_PAGE_SIZE = 20;
+const HOME_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
 
 export default function HomeScreen() {
   const router = useRouter();

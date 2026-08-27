@@ -6,7 +6,7 @@ import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
-import { getCategoryClassicPageSize, getCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
@@ -23,7 +23,7 @@ export default function CategoriesScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pageMode, setPageMode] = useState<CategoryPageMode>("manual");
-  const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(20);
+  const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
@@ -49,7 +49,7 @@ export default function CategoriesScreen() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const pageSize = pageMode === "classic" ? classicPageSize : 20;
+      const pageSize = pageMode === "classic" ? classicPageSize : DEFAULT_LIST_PAGE_SIZE;
       const shouldAggregateChildren = selectedTypeId === root.id && root.children.length > 0;
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([root, ...root.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: category.id }))))
@@ -97,7 +97,7 @@ export default function CategoriesScreen() {
     {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
 
-  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : pageMode === "classic" && pageCount > 1 ? <ClassicPager page={page} pageCount={pageCount} onChange={goToClassicPage} /> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
+  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={3} key="category-grid-3" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : pageMode === "classic" && pageCount > 1 ? <ClassicPager page={page} pageCount={pageCount} onChange={goToClassicPage} /> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
 }
 
 function CategoryPill({ label, active, small = false, onPress }: { label: string; active: boolean; small?: boolean; onPress: () => void }) {
@@ -134,8 +134,8 @@ const styles = StyleSheet.create({
   contentHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 27, marginBottom: 16 },
   contentTitle: { color: "#F7F9FC", fontSize: 22, lineHeight: 29, fontWeight: "900" },
   contentMeta: { color: "#8E9AAD", fontSize: 11, lineHeight: 16, marginTop: 2 },
-  gridRow: { gap: 14 },
-  gridCell: { flex: 1, maxWidth: "50%" },
+  gridRow: { gap: 12 },
+  gridCell: { flex: 1, maxWidth: "33.34%" },
   footer: { paddingVertical: 20, alignItems: "center" },
   loadMore: { alignSelf: "center", height: 40, paddingHorizontal: 18, justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "#334157", backgroundColor: "#171F2D", marginBottom: 14 },
   loadMoreText: { color: "#F7BE5C", fontSize: 12, lineHeight: 17, fontWeight: "900" },
