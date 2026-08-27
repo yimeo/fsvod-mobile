@@ -17,7 +17,7 @@ export function VodCard({ item, onPress }: VodCardProps) {
       onPress={() => onPress(item)}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
-      <VodPoster title={item.name} url={item.posterUrl} style={styles.poster} />
+      <VodPoster title={item.name} url={item.posterUrl} thumbnailUrl={item.thumbnailUrl} style={styles.poster} />
       {item.remarks ? <View style={styles.remark}><Text numberOfLines={1} style={styles.remarkText}>{item.remarks}</Text></View> : null}
       <Text numberOfLines={1} style={styles.title}>{item.name}</Text>
       <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text>

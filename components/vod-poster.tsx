@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 interface VodPosterProps {
   title: string;
   url: string | null;
+  thumbnailUrl?: string | null;
   style?: object;
 }
 
@@ -22,23 +23,28 @@ function generatedTone(title: string): { start: string; end: string } {
   return tones[index];
 }
 
-export function VodPoster({ title, url, style }: VodPosterProps) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [url]);
-  if (url && !failed) {
+export function VodPoster({ title, url, thumbnailUrl, style }: VodPosterProps) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
+  const [fullFailed, setFullFailed] = useState(false);
+  const [fullLoaded, setFullLoaded] = useState(false);
+  const hasDistinctThumbnail = Boolean(thumbnailUrl && thumbnailUrl !== url);
+  const useThumbnail = hasDistinctThumbnail && !thumbnailFailed;
+  const shouldLoadFull = !hasDistinctThumbnail || thumbnailFailed || thumbnailLoaded;
+
+  useEffect(() => {
+    setThumbnailFailed(false);
+    setThumbnailLoaded(false);
+    setFullFailed(false);
+    setFullLoaded(false);
+  }, [thumbnailUrl, url]);
+
+  if ((url && !fullFailed) || (useThumbnail && thumbnailUrl)) {
     return (
-      <Image
-        source={{ uri: url }}
-        style={style}
-        contentFit="cover"
-        cachePolicy="disk"
-        placeholder={{ blurhash: BLUR_HASH }}
-        placeholderContentFit="cover"
-        transition={180}
-        recyclingKey={url}
-        onError={() => setFailed(true)}
-        accessibilityLabel={`${title} 海报`}
-      />
+      <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
+        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" placeholder={{ blurhash: BLUR_HASH }} placeholderContentFit="cover" recyclingKey={`thumb-${thumbnailUrl}`} onLoad={() => setThumbnailLoaded(true)} onError={() => setThumbnailFailed(true)} /> : null}
+        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="disk" transition={260} recyclingKey={`full-${url}`} onLoad={() => setFullLoaded(true)} onError={() => setFullFailed(true)} /> : null}
+      </View>
     );
   }
 
@@ -65,6 +71,8 @@ export function VodPoster({ title, url, style }: VodPosterProps) {
 }
 
 const styles = StyleSheet.create({
+  posterFrame: { overflow: "hidden", backgroundColor: "#151E34" },
+  fullImageHidden: { opacity: 0 },
   generated: { overflow: "hidden", justifyContent: "flex-end", padding: 13, backgroundColor: "#202B46" },
   generatedTopline: { width: 28, height: 3, borderRadius: 4, backgroundColor: "#F5B64B", marginBottom: 8 },
   generatedTitle: { color: "#FFFFFF", fontSize: 19, lineHeight: 25, fontWeight: "800", letterSpacing: 0.4, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },

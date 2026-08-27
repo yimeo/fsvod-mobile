@@ -21,6 +21,7 @@ export interface MacCmsVod {
   year: string;
   area: string;
   language: string;
+  thumbnailUrl: string | null;
   posterUrl: string | null;
   updateTime: string;
 }
@@ -172,7 +173,8 @@ function mapVod(value: unknown, apiUrl: string): MacCmsVod | null {
     year: text(value.vod_year ?? value.year),
     area: text(value.vod_area ?? value.area),
     language: text(value.vod_lang ?? value.lang),
-    posterUrl: resolveUrl(firstNonEmpty(value.vod_pic, value.vod_pic_thumb, value.vod_pic_slide, value.vod_pic_url, value.pic, value.pic_url, value.cover), apiUrl),
+    thumbnailUrl: resolveUrl(firstNonEmpty(value.vod_pic_thumb, value.vod_pic_slide, value.vod_pic, value.pic_thumb, value.pic), apiUrl),
+    posterUrl: resolveUrl(firstNonEmpty(value.vod_pic, value.vod_pic_slide, value.vod_pic_url, value.vod_pic_thumb, value.pic, value.pic_url, value.cover), apiUrl),
     updateTime: text(value.vod_time ?? value.last),
   };
 }

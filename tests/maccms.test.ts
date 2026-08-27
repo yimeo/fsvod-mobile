@@ -33,6 +33,7 @@ describe("MACCMS 数据适配", () => {
       name: "飞鸿测试片",
       parentTypeId: "1",
       posterUrl: "https://video.example.com/uploads/9.jpg",
+      thumbnailUrl: "https://video.example.com/uploads/9.jpg",
     });
   });
 
