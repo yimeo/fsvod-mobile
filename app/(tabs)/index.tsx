@@ -15,7 +15,7 @@ const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, child
 export default function HomeScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ typeId?: string; sort?: string }>();
-  const { endpoint, categories, isBooting, sourceError, refreshCategories } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("");
   const [activeTypeId, setActiveTypeId] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "hot">("latest");
@@ -83,6 +83,8 @@ export default function HomeScreen() {
 
   const latestHistory = history[0];
   const displayItems = items;
+  const currentSource = sources.find((source) => source.id === endpoint?.apiUrl);
+  const sourceCaption = currentSource?.displayName?.trim() || endpoint?.inputDomain || "";
   const continueProgress = latestHistory?.durationSeconds && latestHistory.positionSeconds ? Math.min(100, Math.max(0, Math.round((latestHistory.positionSeconds / latestHistory.durationSeconds) * 100))) : 0;
 
   const resumeHistory = async (entry: WatchHistoryEntry) => {
@@ -99,7 +101,7 @@ export default function HomeScreen() {
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><VodPoster title="飞鸿影院" url={null} style={styles.emptyIcon} /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
 
   const listHeader = <View>
-    <View style={styles.appHeader}><View><Text style={styles.brandName}>飞鸿影院</Text><Text numberOfLines={1} style={styles.sourceCaption}>{endpoint.inputDomain}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
+    <View style={styles.appHeader}><View><Text style={styles.brandName}>飞鸿影院</Text><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
     <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>网络不可用，正在展示本地已缓存内容。</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
