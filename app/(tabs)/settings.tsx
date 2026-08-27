@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
@@ -17,7 +17,9 @@ export default function SettingsScreen() {
   const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, updateSource, reorderSource, sourceError } = useVodSource();
   const { settings } = useDownloadQueue();
   const router = useRouter();
-  const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceAddress, setNewSourceAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
@@ -36,7 +38,6 @@ export default function SettingsScreen() {
   }, []);
 
   useEffect(() => {
-    setDomain(endpoint?.inputDomain ?? "");
     void loadCacheSummary();
   }, [endpoint, loadCacheSummary]);
 
@@ -48,13 +49,17 @@ export default function SettingsScreen() {
   };
 
   const detectAndSave = async () => {
+    const address = newSourceAddress.trim();
+    if (!address) { setMessage("请填写数据源地址。"); return; }
     setIsSaving(true);
     setMessage(null);
     try {
-      const result = await configureSource(domain, sourceDisplayName);
-      setDomain("");
-      setSourceDisplayName("");
-      setMessage(`已识别并保存“${result.inputDomain}”数据源。`);
+      const displayName = newSourceName.trim() || getDefaultSourceName(address);
+      const result = await configureSource(address, displayName);
+      setNewSourceAddress("");
+      setNewSourceName("");
+      setIsAddModalVisible(false);
+      setMessage(`已识别并保存“${displayName || result.inputDomain}”数据源。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "数据源识别失败");
     } finally {
@@ -128,18 +133,9 @@ export default function SettingsScreen() {
         <View style={styles.preferenceCard}><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>仅在 Wi‑Fi 下载</Text><Text style={styles.preferenceText}>{settings?.wifiOnly ? "开启后不会使用移动数据下载剧集" : "已允许使用移动数据下载"}</Text></View><View style={[styles.preferencePill, settings?.wifiOnly && styles.preferencePillActive]}><Text style={styles.preferencePillText}>{settings?.wifiOnly ? "已开启" : "已关闭"}</Text></View></View><View style={styles.preferenceDivider} /><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>最大缓存容量</Text><Text style={styles.preferenceText}>当前 {formatBytes(cache.offlineBytes)} / {settings ? formatStorageLimit(settings.storageLimitBytes) : "—"}</Text></View><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.preferenceLink, pressed && styles.pressed]}><Text style={styles.preferenceLinkText}>管理 ›</Text></Pressable></View></View>
         <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类页翻页模式</Text><Text style={styles.paginationText}>选择分类内容滚动到末尾时的加载方式。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载更多</Text></Pressable></View></View>
         <View style={styles.section}>
-          <Text style={styles.label}>数据源名称</Text>
-          <TextInput value={sourceDisplayName} onChangeText={setSourceDisplayName} autoCorrect={false} returnKeyType="next" placeholder="例如：主线路、备用源" placeholderTextColor="#71809B" style={styles.input} />
-          <Text style={[styles.label, styles.addressLabel]}>数据源地址</Text>
-          <TextInput value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} />
-          <Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.primaryButton, (pressed || isSaving) && styles.pressed, isSaving && styles.disabled]}>
-            {isSaving ? <ActivityIndicator color="#10182B" /> : <Text style={styles.primaryText}>添加并识别数据源</Text>}
-          </Pressable>
+          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>可添加、重命名、排序、切换与检测 MACCMS API。</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
-        </View>
-        <View style={styles.section}>
-          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>可添加、重命名、排序、切换与检测 MACCMS API。</Text></View><Text style={styles.sourceCount}>{sources.length} 个</Text></View>
           {sources.length ? sources.map((source, index) => (
             <View key={source.id} style={[styles.sourceItem, endpoint?.apiUrl === source.id && styles.sourceItemActive]}>
               {editingSourceId === source.id ? (
@@ -181,6 +177,9 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.note}><Text style={styles.noteTitle}>播放说明</Text><Text style={styles.noteText}>支持直接播放的常见 MP4、M3U8 等地址会进入原生播放器。其他网页型地址会保留清晰提示，以便你在浏览器中打开。</Text></View>
       </ScrollView>
+      <Modal visible={isAddModalVisible} transparent animationType="fade" onRequestClose={() => setIsAddModalVisible(false)}>
+        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeading}><View><Text style={styles.modalTitle}>添加资源</Text><Text style={styles.modalSubtitle}>名称和地址都可以随时编辑</Text></View><Pressable onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}><Text style={styles.modalCloseText}>×</Text></Pressable></View><Text style={styles.label}>数据源名称</Text><TextInput value={newSourceName} onChangeText={setNewSourceName} autoCorrect={false} returnKeyType="next" placeholder="可选，例如：主线路" placeholderTextColor="#71809B" style={styles.input} /><Text style={styles.fieldHint}>留空时自动使用域名，例如 example.com。</Text><Text style={[styles.label, styles.addressLabel]}>数据源地址</Text><TextInput value={newSourceAddress} onChangeText={setNewSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} /><View style={styles.modalActions}><Pressable onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalCancel, pressed && styles.pressed]}><Text style={styles.modalCancelText}>取消</Text></Pressable><Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.modalConfirm, (pressed || isSaving) && styles.pressed]}>{isSaving ? <ActivityIndicator color="#10182B" size="small" /> : <Text style={styles.modalConfirmText}>添加并识别</Text>}</Pressable></View></View></View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -194,6 +193,10 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB"];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / Math.pow(1024, index)).toFixed(index > 1 ? 1 : 0)} ${units[index]}`;
+}
+
+function getDefaultSourceName(address: string): string {
+  return address.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "").split("/")[0] || "未命名数据源";
 }
 
 const styles = StyleSheet.create({
@@ -242,8 +245,11 @@ const styles = StyleSheet.create({
   error: { color: "#F8C174", fontSize: 12, lineHeight: 18, marginTop: 10 },
   sectionTitle: { color: "#F4F6FA", fontSize: 15, fontWeight: "800", lineHeight: 21, marginBottom: 10 },
   sourceHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  sourceHeaderActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   sourceIntro: { color: "#8896AD", fontSize: 11, lineHeight: 16, marginTop: -6, marginBottom: 10 },
   sourceCount: { color: "#F5C66E", fontSize: 11, lineHeight: 16, fontWeight: "800", backgroundColor: "#2A2533", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  addSourceButton: { height: 37, paddingHorizontal: 12, borderRadius: 11, justifyContent: "center", backgroundColor: "#FFB84D" },
+  addSourceButtonText: { color: "#141821", fontSize: 12, lineHeight: 17, fontWeight: "900" },
   sourceItem: { backgroundColor: "#11192A", borderWidth: 1, borderColor: "#2C3953", borderRadius: 16, marginTop: 10, padding: 14 },
   sourceItemActive: { borderColor: "#D99D40", backgroundColor: "#171D2D" },
   sourceTop: { flexDirection: "row", alignItems: "center", gap: 11 },
@@ -279,6 +285,19 @@ const styles = StyleSheet.create({
   secondaryButton: { borderWidth: 1, borderColor: "#48648D", height: 42, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 14 },
   secondaryText: { color: "#B7D6F7", fontWeight: "700", fontSize: 13 },
   cacheHint: { color: "#8592AB", fontSize: 11, lineHeight: 17, marginTop: 10 },
+  modalBackdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(2, 5, 12, 0.74)" },
+  modalCard: { borderRadius: 20, padding: 18, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#35435D" },
+  modalHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 19 },
+  modalTitle: { color: "#F5F7FB", fontSize: 20, lineHeight: 27, fontWeight: "900" },
+  modalSubtitle: { color: "#93A0B4", fontSize: 11, lineHeight: 16, marginTop: 2 },
+  modalClose: { width: 30, height: 30, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#222C40" },
+  modalCloseText: { color: "#C8D3E2", fontSize: 23, lineHeight: 25, fontWeight: "500" },
+  fieldHint: { color: "#8795AB", fontSize: 10, lineHeight: 15, marginTop: 5 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 21 },
+  modalCancel: { flex: 1, height: 43, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#42526F" },
+  modalCancelText: { color: "#C9D5E5", fontSize: 13, lineHeight: 19, fontWeight: "900" },
+  modalConfirm: { flex: 1.35, height: 43, borderRadius: 12, justifyContent: "center", alignItems: "center", backgroundColor: "#FFB84D" },
+  modalConfirmText: { color: "#141821", fontSize: 13, lineHeight: 19, fontWeight: "900" },
   note: { marginTop: 16, paddingHorizontal: 15, paddingVertical: 13, borderRadius: 14, backgroundColor: "#192945" },
   noteTitle: { color: "#F8D28D", fontSize: 13, fontWeight: "800", lineHeight: 19 },
   noteText: { color: "#B5C1D5", fontSize: 12, lineHeight: 19, marginTop: 4 },
