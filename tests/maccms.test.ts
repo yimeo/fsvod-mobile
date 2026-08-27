@@ -72,6 +72,24 @@ describe("MACCMS 数据适配", () => {
     expect(categories[0].children[0]).toMatchObject({ id: "3", name: "动作" });
   });
 
+  it("主分类和子分类均按分类 ID 从小到大排序", () => {
+    const categories = buildCategoryTree(
+      [{
+        class: [
+          { type_id: 10, type_name: "分类十", type_pid: 0 },
+          { type_id: 2, type_name: "分类二", type_pid: 0 },
+          { type_id: 1, type_name: "分类一", type_pid: 0 },
+          { type_id: 11, type_name: "子类十一", type_pid: 1 },
+          { type_id: 3, type_name: "子类三", type_pid: 1 },
+        ],
+      }],
+      [],
+    );
+
+    expect(categories.map((item) => item.id)).toEqual(["1", "2", "10"]);
+    expect(categories[0].children.map((item) => item.id)).toEqual(["3", "11"]);
+  });
+
   it("解析多线路与多剧集播放地址", () => {
     const sources = parsePlaySources(
       "主线路$$$备用线路",

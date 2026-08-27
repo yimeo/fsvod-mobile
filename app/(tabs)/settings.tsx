@@ -30,6 +30,7 @@ export default function SettingsScreen() {
   const [categoryPageMode, setCategoryPageMode] = useState<CategoryPageMode>("manual");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(20);
   const activeSource = sources.find((source) => source.id === endpoint?.apiUrl);
+  const activeSourceTone = activeSource?.health === "healthy" ? "healthy" : activeSource?.health === "unhealthy" ? "unhealthy" : "unknown";
 
   const loadCacheSummary = useCallback(async () => {
     const local = await getLocalCacheSummary();
@@ -149,7 +150,7 @@ export default function SettingsScreen() {
   return (
     <ScreenContainer containerClassName="bg-background">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={styles.profileHeader}><Image source={require("@/assets/images/icon.png")} style={styles.profileIcon} /><View style={styles.profileCopy}><Text style={styles.heading}>我的飞鸿影院</Text><Text numberOfLines={1} style={styles.lead}>{activeSource?.displayName || "本地影视内容库"}</Text></View></View>
+        <View style={styles.profileHeader}><Image source={require("@/assets/images/icon.png")} style={styles.profileIcon} /><View style={styles.profileCopy}><Text style={styles.heading}>我的飞鸿影院</Text><View style={styles.profileLeadRow}><View style={[styles.profileStatusDot, activeSourceTone === "healthy" && styles.profileStatusDotHealthy, activeSourceTone === "unhealthy" && styles.profileStatusDotUnhealthy]} /><Text numberOfLines={1} style={styles.lead}>{activeSource?.displayName || "本地影视内容库"}</Text></View></View></View>
         <View style={styles.overviewList}><Pressable onPress={() => router.navigate("/history" as never)} style={({ pressed }) => [styles.overviewCard, pressed && styles.pressed]}><View style={styles.overviewIcon}><Text style={styles.overviewGlyph}>◷</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>观看记录</Text><Text style={styles.overviewText}>{cache.history ? `${cache.history} 条记录，可继续观看` : "暂无观看记录"}</Text></View><Text style={styles.overviewArrow}>›</Text></Pressable><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.overviewCard, styles.downloadOverview, pressed && styles.pressed]}><View style={[styles.overviewIcon, styles.downloadOverviewIcon]}><Text style={[styles.overviewGlyph, styles.downloadOverviewGlyph]}>↓</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>已下载剧集</Text><Text style={styles.overviewText}>{cache.offlineCount ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : "暂无已下载剧集"}</Text></View><Text style={[styles.overviewArrow, styles.downloadOverviewGlyph]}>›</Text></Pressable></View>
         <View style={styles.section}>
           <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>可添加、重命名、排序、切换与检测 MACCMS API。</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
@@ -226,7 +227,11 @@ const styles = StyleSheet.create({
   profileIcon: { width: 49, height: 49, borderRadius: 15 },
   profileCopy: { flex: 1, minWidth: 0 },
   heading: { color: "#F6F7FB", fontSize: 27, fontWeight: "800", lineHeight: 35 },
-  lead: { color: "#9CA7BE", fontSize: 12, lineHeight: 18, marginTop: 1 },
+  profileLeadRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 },
+  profileStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#77869D", flexShrink: 0 },
+  profileStatusDotHealthy: { backgroundColor: "#78D3A4" },
+  profileStatusDotUnhealthy: { backgroundColor: "#F39A79" },
+  lead: { color: "#9CA7BE", fontSize: 12, lineHeight: 18, flexShrink: 1 },
   overviewList: { gap: 11 },
   overviewCard: { minHeight: 82, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, borderRadius: 17, backgroundColor: "#202B3D", borderWidth: 1, borderColor: "#2C3A53" },
   downloadOverview: { backgroundColor: "#143A31", borderColor: "#317360" },

@@ -210,6 +210,15 @@ function categoryFromRecord(value: unknown): Omit<MacCmsCategory, "children"> | 
   return { id, name, parentId: parent && parent !== "0" ? parent : null };
 }
 
+function compareCategoryIds(left: MacCmsCategory, right: MacCmsCategory): number {
+  const leftNumeric = Number(left.id);
+  const rightNumeric = Number(right.id);
+  if (Number.isFinite(leftNumeric) && Number.isFinite(rightNumeric) && leftNumeric !== rightNumeric) {
+    return leftNumeric - rightNumeric;
+  }
+  return left.id.localeCompare(right.id, "zh-CN", { numeric: true });
+}
+
 function collectCategoryRecords(value: unknown): Omit<MacCmsCategory, "children">[] {
   if (Array.isArray(value)) return value.flatMap(collectCategoryRecords);
   if (!isRecord(value)) return [];
@@ -244,7 +253,7 @@ export function buildCategoryTree(payloads: unknown[], fallbackItems: MacCmsVod[
     else roots.push(node);
   });
   const sortCategories = (items: MacCmsCategory[]) => {
-    items.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+    items.sort(compareCategoryIds);
     items.forEach((item) => sortCategories(item.children));
   };
   sortCategories(roots);
