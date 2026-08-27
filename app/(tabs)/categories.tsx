@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { SourceQuickSwitcher } from "@/components/source-quick-switcher";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
 import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
@@ -102,7 +103,7 @@ export default function CategoriesScreen() {
 
   const listHeader = <View>
     <Text style={styles.heading}>分类浏览</Text>
-    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><View style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></View></View>
+    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></SourceQuickSwitcher></View>
     <View style={styles.sectionHead}><Text style={styles.sectionTitle}>主分类</Text><Text style={styles.sectionMeta}>{categories.length} 个分类</Text></View>
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rootList} renderItem={({ item }) => <CategoryPill label={item.name} active={item.id === root.id} onPress={() => chooseRoot(item.id)} />} />
     {root.children.length ? <><View style={styles.sectionHead}><Text style={styles.sectionTitle}>{root.name}的子分类</Text><Text style={styles.sectionMeta}>{root.children.length} 个子分类</Text></View><FlatList horizontal data={childChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childList} renderItem={({ item }) => <CategoryPill label={item.name} small active={item.id === selectedTypeId} onPress={() => setChildId(item.id)} />} /></> : null}
