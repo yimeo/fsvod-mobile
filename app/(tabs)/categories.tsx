@@ -132,7 +132,7 @@ function getClassicPageNumbers(page: number, pageCount: number): number[] {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 34 },
   heading: { color: "#F8FAFC", fontSize: 30, lineHeight: 38, fontWeight: "900", letterSpacing: -0.7 },
-  brandSourceRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 3, minWidth: 0 },
+  brandSourceRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, marginTop: 3, minWidth: 0 },
   brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
   sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },

@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   topBar: { height: 54, flexDirection: "row", alignItems: "center" },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#20293A", alignItems: "center", justifyContent: "center" },
   backLabel: { color: "#F2F4F8", fontWeight: "500", fontSize: 39, lineHeight: 41, marginTop: -5 },
-  headerIdentity: { flex: 1, minWidth: 0, marginLeft: 10, flexDirection: "row", alignItems: "center", gap: 7 },
+  headerIdentity: { flex: 1, minWidth: 0, marginLeft: 10, flexDirection: "row", alignItems: "flex-end", gap: 7 },
   topBrand: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
   sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
