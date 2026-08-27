@@ -53,6 +53,7 @@ export default function TabLayout() {
         name="downloads"
         options={{
           title: "下载",
+          href: null,
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="arrow.down.circle.fill" color={color} />,
         }}
       />
@@ -66,8 +67,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "设置",
-          tabBarIcon: ({ color }) => <IconSymbol size={27} name="gearshape.fill" color={color} />,
+          title: "我的",
+          tabBarIcon: ({ color }) => <IconSymbol size={27} name="person.crop.circle.fill" color={color} />,
         }}
       />
     </Tabs>

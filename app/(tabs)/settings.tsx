@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const [sourceDisplayName, setSourceDisplayName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
+  const activeSource = sources.find((source) => source.id === endpoint?.apiUrl);
 
   const loadCacheSummary = useCallback(async () => {
     const local = await getLocalCacheSummary();
@@ -104,8 +105,9 @@ export default function SettingsScreen() {
   return (
     <ScreenContainer containerClassName="bg-background">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <Text style={styles.heading}>数据源与缓存</Text>
-        <Text style={styles.lead}>只需填写站点域名。应用会检测常见的 MACCMS V10 数据接口路径，并自动读取分类。</Text>
+        <View style={styles.profileHeader}><Image source={require("@/assets/images/icon.png")} style={styles.profileIcon} /><View style={styles.profileCopy}><Text style={styles.heading}>我的飞鸿影院</Text><Text numberOfLines={1} style={styles.lead}>{activeSource?.displayName || "本地影视内容库"}</Text></View></View>
+        <View style={styles.overviewList}><Pressable onPress={() => router.navigate("/" as never)} style={({ pressed }) => [styles.overviewCard, pressed && styles.pressed]}><View style={styles.overviewIcon}><Text style={styles.overviewGlyph}>◷</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>观看记录</Text><Text style={styles.overviewText}>{cache.history ? `${cache.history} 条记录，可继续观看` : "暂无观看记录"}</Text></View><Text style={styles.overviewArrow}>›</Text></Pressable><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.overviewCard, styles.downloadOverview, pressed && styles.pressed]}><View style={[styles.overviewIcon, styles.downloadOverviewIcon]}><Text style={[styles.overviewGlyph, styles.downloadOverviewGlyph]}>↓</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>已下载剧集</Text><Text style={styles.overviewText}>{cache.offlineCount ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : "暂无已下载剧集"}</Text></View><Text style={[styles.overviewArrow, styles.downloadOverviewGlyph]}>›</Text></Pressable></View>
+        <View style={styles.preferenceCard}><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>仅在 Wi‑Fi 下载</Text><Text style={styles.preferenceText}>{settings?.wifiOnly ? "开启后不会使用移动数据下载剧集" : "已允许使用移动数据下载"}</Text></View><View style={[styles.preferencePill, settings?.wifiOnly && styles.preferencePillActive]}><Text style={styles.preferencePillText}>{settings?.wifiOnly ? "已开启" : "已关闭"}</Text></View></View><View style={styles.preferenceDivider} /><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>最大缓存容量</Text><Text style={styles.preferenceText}>当前 {formatBytes(cache.offlineBytes)} / {settings ? formatStorageLimit(settings.storageLimitBytes) : "—"}</Text></View><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.preferenceLink, pressed && styles.pressed]}><Text style={styles.preferenceLinkText}>管理 ›</Text></Pressable></View></View>
         <View style={styles.section}>
           <Text style={styles.label}>MACCMS 站点域名</Text>
           <TextInput value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} />
@@ -116,7 +118,7 @@ export default function SettingsScreen() {
           {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
         </View>
         <View style={styles.section}>
-          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>已保存数据源</Text><Text style={styles.sourceIntro}>点按名称即可切换，检测可更新连接状态。</Text></View><Text style={styles.sourceCount}>{sources.length} 个</Text></View>
+          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>可添加、重命名、排序、切换与检测 MACCMS API。</Text></View><Text style={styles.sourceCount}>{sources.length} 个</Text></View>
           {sources.length ? sources.map((source, index) => (
             <View key={source.id} style={[styles.sourceItem, endpoint?.apiUrl === source.id && styles.sourceItemActive]}>
               {editingSourceId === source.id ? (
@@ -179,8 +181,32 @@ function formatBytes(bytes: number): string {
 
 const styles = StyleSheet.create({
   content: { padding: 18, paddingTop: 23, paddingBottom: 36 },
+  profileHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 19 },
+  profileIcon: { width: 49, height: 49, borderRadius: 15 },
+  profileCopy: { flex: 1, minWidth: 0 },
   heading: { color: "#F6F7FB", fontSize: 27, fontWeight: "800", lineHeight: 35 },
-  lead: { color: "#9CA7BE", fontSize: 13, lineHeight: 21, marginTop: 8 },
+  lead: { color: "#9CA7BE", fontSize: 12, lineHeight: 18, marginTop: 1 },
+  overviewList: { gap: 11 },
+  overviewCard: { minHeight: 82, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, borderRadius: 17, backgroundColor: "#202B3D", borderWidth: 1, borderColor: "#2C3A53" },
+  downloadOverview: { backgroundColor: "#143A31", borderColor: "#317360" },
+  overviewIcon: { width: 43, height: 43, borderRadius: 13, backgroundColor: "#162138", alignItems: "center", justifyContent: "center" },
+  downloadOverviewIcon: { backgroundColor: "#0C3028" },
+  overviewGlyph: { color: "#F7C46B", fontSize: 23, lineHeight: 26, fontWeight: "900" },
+  downloadOverviewGlyph: { color: "#89E0BF" },
+  overviewCopy: { flex: 1, minWidth: 0, marginLeft: 12 },
+  overviewTitle: { color: "#F4F7FA", fontSize: 15, lineHeight: 21, fontWeight: "900" },
+  overviewText: { color: "#AAB5C7", fontSize: 11, lineHeight: 17, marginTop: 2 },
+  overviewArrow: { color: "#B5C3D7", fontSize: 28, lineHeight: 31, fontWeight: "500" },
+  preferenceCard: { marginTop: 15, borderRadius: 17, paddingHorizontal: 16, paddingVertical: 15, backgroundColor: "#151928", borderWidth: 1, borderColor: "#2B344A" },
+  preferenceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  preferenceTitle: { color: "#EDF1F7", fontSize: 14, lineHeight: 20, fontWeight: "900" },
+  preferenceText: { color: "#99A6BA", fontSize: 11, lineHeight: 17, marginTop: 2 },
+  preferencePill: { minWidth: 53, height: 28, borderRadius: 14, paddingHorizontal: 9, backgroundColor: "#3E3440", justifyContent: "center", alignItems: "center" },
+  preferencePillActive: { backgroundColor: "#806026" },
+  preferencePillText: { color: "#F4D393", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  preferenceDivider: { height: StyleSheet.hairlineWidth, backgroundColor: "#344058", marginVertical: 13 },
+  preferenceLink: { height: 31, paddingHorizontal: 9, justifyContent: "center", borderRadius: 8, backgroundColor: "#1F2A3E" },
+  preferenceLinkText: { color: "#F6C36A", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   section: { marginTop: 22, padding: 16, borderRadius: 16, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#283452" },
   label: { color: "#DCE2EE", fontWeight: "700", fontSize: 13, lineHeight: 19, marginBottom: 9 },
   input: { height: 47, borderRadius: 11, borderWidth: 1, borderColor: "#344464", backgroundColor: "#0F1729", color: "#F6F7FB", fontSize: 14, paddingHorizontal: 12, paddingVertical: 0 },

@@ -22,6 +22,7 @@ export default function DownloadsScreen() {
         ListHeaderComponent={<View>
           <Text style={styles.eyebrow}>OFFLINE DOWNLOADS</Text>
           <Text style={styles.heading}>下载中心</Text>
+          <Text style={styles.lead}>管理已缓存剧集、下载条件与离线存储空间。</Text>
           <View style={[styles.networkCard, isWifi && isActive ? styles.networkReady : styles.networkWaiting]}>
             <Text style={styles.networkTitle}>{isWifi && isActive ? "可自动下载" : !isActive ? "应用进入后台后暂停" : "等待 Wi‑Fi"}</Text>
             <Text style={styles.networkText}>{settings?.wifiOnly ? "省电模式：应用保持打开且连接 Wi‑Fi 时，队列会依次自动继续。" : "应用打开时，队列会依次自动继续。"}</Text>
@@ -54,7 +55,8 @@ function Action({ label, onPress, primary = false }: { label: string; onPress: (
 const styles = StyleSheet.create({
   content: { padding: 18, paddingBottom: 34 },
   eyebrow: { color: "#F5B64B", letterSpacing: 1.6, fontSize: 10, lineHeight: 15, fontWeight: "800", paddingTop: 16 },
-  heading: { color: "#F6F7FB", fontWeight: "800", fontSize: 27, lineHeight: 35, marginTop: 3, marginBottom: 15 },
+  heading: { color: "#F6F7FB", fontWeight: "900", fontSize: 28, lineHeight: 36, marginTop: 3 },
+  lead: { color: "#94A1B4", fontSize: 12, lineHeight: 18, marginTop: 2, marginBottom: 15 },
   networkCard: { borderRadius: 14, padding: 14, borderWidth: 1 },
   networkReady: { backgroundColor: "#173C36", borderColor: "#326F5F" },
   networkWaiting: { backgroundColor: "#302A3A", borderColor: "#645778" },

@@ -18,6 +18,7 @@ const MAPPING = {
   "square.grid.2x2.fill": "category",
   "magnifyingglass": "search",
   "gearshape.fill": "settings",
+  "person.crop.circle.fill": "person",
   "play.rectangle.fill": "play-circle-filled",
   "arrow.down.circle.fill": "download",
   "clock.arrow.circlepath": "history",

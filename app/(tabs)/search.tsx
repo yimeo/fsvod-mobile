@@ -49,7 +49,7 @@ export default function SearchScreen() {
         renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>}
         columnWrapperStyle={items.length ? styles.gridRow : undefined}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={<View><Text style={styles.heading}>搜索影片</Text><View style={styles.searchBox}><TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => void search()} placeholder="输入片名、演员或关键词" placeholderTextColor="#7A879F" style={styles.input} returnKeyType="search" /><Pressable accessibilityRole="button" accessibilityLabel="提交搜索" onPress={() => void search()} style={({ pressed }) => [styles.submit, pressed && styles.pressed]}><Text style={styles.submitText}>搜索</Text></Pressable></View>{error ? <Text style={styles.error}>{error}</Text> : null}{submittedQuery ? <Text style={styles.resultText}>“{submittedQuery}” 的搜索结果</Text> : <Text style={styles.hint}>MACCMS 支持按片名与关键词检索。</Text>}</View>}
+        ListHeaderComponent={<View><Text style={styles.eyebrow}>DISCOVER</Text><Text style={styles.heading}>搜索影片</Text><Text style={styles.lead}>片名、演员、关键词，快速找到想看的作品。</Text><View style={styles.searchBox}><TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => void search()} placeholder="输入片名、演员或关键词" placeholderTextColor="#7A879F" style={styles.input} returnKeyType="search" /><Pressable accessibilityRole="button" accessibilityLabel="提交搜索" onPress={() => void search()} style={({ pressed }) => [styles.submit, pressed && styles.pressed]}><Text style={styles.submitText}>搜索</Text></Pressable></View>{error ? <Text style={styles.error}>{error}</Text> : null}{submittedQuery ? <Text style={styles.resultText}>“{submittedQuery}” 的搜索结果</Text> : <Text style={styles.hint}>输入关键词，查看当前数据源中可用的影视内容。</Text>}</View>}
         ListEmptyComponent={isLoading ? <View style={styles.loading}><ActivityIndicator color="#F5B64B" size="large" /></View> : submittedQuery ? <View style={styles.empty}><Text style={styles.emptyTitle}>没有找到相关影片</Text><Text style={styles.emptyText}>尝试缩短关键词，或检查数据源的搜索能力。</Text></View> : <View style={styles.empty}><Text style={styles.emptyTitle}>开始搜索</Text><Text style={styles.emptyText}>输入片名、演员或你感兴趣的内容。</Text></View>}
         showsVerticalScrollIndicator={false}
       />
@@ -59,7 +59,9 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 18, paddingBottom: 30 },
-  heading: { color: "#F6F7FB", fontSize: 27, fontWeight: "800", lineHeight: 35, paddingTop: 16, marginBottom: 17 },
+  eyebrow: { color: "#F5B64B", fontSize: 10, lineHeight: 15, fontWeight: "900", letterSpacing: 1.5, paddingTop: 15 },
+  heading: { color: "#F6F7FB", fontSize: 28, fontWeight: "900", lineHeight: 36, marginTop: 2 },
+  lead: { color: "#94A1B4", fontSize: 12, lineHeight: 18, marginTop: 3, marginBottom: 16 },
   searchBox: { height: 49, borderRadius: 14, flexDirection: "row", backgroundColor: "#151E34", borderWidth: 1, borderColor: "#2B3958", paddingLeft: 14, alignItems: "center" },
   input: { flex: 1, color: "#F6F7FB", fontSize: 14, lineHeight: 20, paddingVertical: 0, paddingRight: 10 },
   submit: { backgroundColor: "#F5B64B", height: 37, justifyContent: "center", paddingHorizontal: 14, borderRadius: 10, marginRight: 6 },

@@ -96,7 +96,7 @@ export default function HomeScreen() {
   const sectionTitle = `${activeTypeId === selectedRoot.id && selectedRoot.children.length > 0 ? `${selectedRoot.name} · 全部内容` : activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name}${activeArea ? ` · ${activeArea}` : ""}${activeYear ? ` · ${activeYear}` : ""}`;
 
   const renderHeader = () => <View>
-    <View style={styles.appHeader}><View style={styles.brandLine}><Image source={require("@/assets/images/icon.png")} style={styles.headerIcon} /><Text style={styles.brandName}>飞鸿影院</Text></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.buttonPressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
+    <View style={styles.appHeader}><View style={styles.brandLine}><Image source={require("@/assets/images/icon.png")} style={styles.headerIcon} /><View style={styles.brandCopy}><Text style={styles.brandName}>飞鸿影院</Text><Text numberOfLines={1} style={styles.sourceCaption}>{endpoint.inputDomain}</Text></View></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.buttonPressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
     {weeklyPopular.length ? <View style={styles.weeklySection}><View style={styles.weeklyHeading}><View><Text style={styles.weeklyKicker}>WEEKLY POPULAR</Text><Text style={styles.weeklyTitle}>本周人气</Text></View><Text style={styles.weeklyMeta}>左右滑动</Text></View><FlatList horizontal data={weeklyPopular} keyExtractor={(item) => `weekly-${item.id}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weeklyList} snapToInterval={296} decelerationRate="fast" renderItem={({ item, index }) => <Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: item.id } } as never)} style={({ pressed }) => [styles.weeklyCard, pressed && styles.buttonPressed]}><VodPoster title={item.name} url={item.posterUrl} thumbnailUrl={item.thumbnailUrl} style={styles.weeklyPoster} /><View style={styles.weeklyShade} /><View style={styles.weeklyIndex}><Text style={styles.weeklyIndexText}>{String(index + 1).padStart(2, "0")}</Text></View><View style={styles.weeklyInfo}><Text numberOfLines={2} style={styles.weeklyName}>{item.name}</Text><Text numberOfLines={1} style={styles.weeklyDetail}>{[item.typeName, item.remarks].filter(Boolean).join(" · ") || "本周热门"}</Text></View></Pressable>} /></View> : <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => chooseRoot(featuredType)} style={({ pressed }) => [styles.heroAction, pressed && styles.buttonPressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>}
     <FlatList horizontal data={rootCategories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={activeRootId === item.id} onPress={() => chooseRoot(item.id)} />} />
     {childCategoryChoices.length > 0 ? <FlatList horizontal data={childCategoryChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subcategoryList} renderItem={({ item }) => <CategoryChip label={item.name} compact active={activeTypeId === item.id} onPress={() => chooseChild(item.id)} />} /> : null}
@@ -119,10 +119,12 @@ function SortButton({ label, active, onPress }: { label: string; active: boolean
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingBottom: 34 },
-  appHeader: { height: 58, paddingTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  brandLine: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerIcon: { width: 28, height: 28, borderRadius: 8 },
-  brandName: { color: "#F6F7FB", fontSize: 18, lineHeight: 25, fontWeight: "900", letterSpacing: 0.3 },
+  appHeader: { height: 66, paddingTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  brandLine: { flexDirection: "row", alignItems: "center", gap: 9 },
+  headerIcon: { width: 35, height: 35, borderRadius: 11 },
+  brandCopy: { maxWidth: 230 },
+  brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 25, fontWeight: "900", letterSpacing: -0.2 },
+  sourceCaption: { color: "#8492A7", fontSize: 10, lineHeight: 14, marginTop: 1 },
   searchButton: { width: 41, height: 41, borderRadius: 14, backgroundColor: "#1D263B", justifyContent: "center", alignItems: "center" },
   searchIcon: { color: "#F6F7FB", fontWeight: "700", fontSize: 28, lineHeight: 30, transform: [{ rotate: "-20deg" }] },
   heroCard: { minHeight: 266, overflow: "hidden", backgroundColor: "#20233A", borderRadius: 25, padding: 27, marginTop: 10 },

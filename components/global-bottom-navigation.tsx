@@ -7,9 +7,8 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 const NAV_ITEMS = [
   { label: "首页", icon: "house.fill", href: "/" },
   { label: "分类", icon: "square.grid.2x2.fill", href: "/categories" },
-  { label: "下载", icon: "arrow.down.circle.fill", href: "/downloads" },
   { label: "搜索", icon: "magnifyingglass", href: "/search" },
-  { label: "设置", icon: "gearshape.fill", href: "/settings" },
+  { label: "我的", icon: "person.crop.circle.fill", href: "/settings" },
 ] as const;
 
 export function GlobalBottomNavigation() {
