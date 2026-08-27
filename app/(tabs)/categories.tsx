@@ -1,10 +1,12 @@
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
+import { getCategoryPageMode, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
@@ -20,6 +22,7 @@ export default function CategoriesScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pageMode, setPageMode] = useState<CategoryPageMode>("manual");
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
@@ -31,6 +34,8 @@ export default function CategoriesScreen() {
       setChildId(categories[0].id);
     }
   }, [categories, rootId]);
+
+  useFocusEffect(useCallback(() => { void getCategoryPageMode().then(setPageMode); }, []));
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedTypeId) return;
@@ -77,7 +82,7 @@ export default function CategoriesScreen() {
     {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
 
-  return <ScreenContainer containerClassName="bg-background"><FlatList data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : page < pageCount ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (!isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
+  return <ScreenContainer containerClassName="bg-background"><FlatList data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
 }
 
 function CategoryPill({ label, active, small = false, onPress }: { label: string; active: boolean; small?: boolean; onPress: () => void }) {
@@ -107,6 +112,8 @@ const styles = StyleSheet.create({
   footer: { paddingVertical: 20, alignItems: "center" },
   loadMore: { alignSelf: "center", height: 40, paddingHorizontal: 18, justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "#334157", backgroundColor: "#171F2D", marginBottom: 14 },
   loadMoreText: { color: "#F7BE5C", fontSize: 12, lineHeight: 17, fontWeight: "900" },
+  autoHint: { paddingVertical: 18, alignItems: "center" },
+  autoHintText: { color: "#77869C", fontSize: 11, lineHeight: 16 },
   endText: { color: "#68778E", textAlign: "center", paddingBottom: 14, fontSize: 12 },
   warning: { color: "#F6C174", backgroundColor: "#2A2630", fontSize: 12, lineHeight: 18, padding: 10, borderRadius: 10, marginBottom: 12 },
   noResults: { alignItems: "center", paddingVertical: 52 },

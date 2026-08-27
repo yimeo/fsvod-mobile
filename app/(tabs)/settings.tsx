@@ -5,7 +5,7 @@ import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { clearLocalVodData, getLocalCacheSummary, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { clearLocalVodData, getCategoryPageMode, getLocalCacheSummary, saveCategoryPageMode, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 import { useDownloadQueue } from "@/lib/download-queue-context";
@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const [sourceDisplayName, setSourceDisplayName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
+  const [categoryPageMode, setCategoryPageMode] = useState<CategoryPageMode>("manual");
   const activeSource = sources.find((source) => source.id === endpoint?.apiUrl);
 
   const loadCacheSummary = useCallback(async () => {
@@ -37,6 +38,13 @@ export default function SettingsScreen() {
     setDomain(endpoint?.inputDomain ?? "");
     void loadCacheSummary();
   }, [endpoint, loadCacheSummary]);
+
+  useEffect(() => { void getCategoryPageMode().then(setCategoryPageMode); }, []);
+
+  const setPageMode = (mode: CategoryPageMode) => {
+    setCategoryPageMode(mode);
+    void saveCategoryPageMode(mode);
+  };
 
   const detectAndSave = async () => {
     setIsSaving(true);
@@ -108,6 +116,7 @@ export default function SettingsScreen() {
         <View style={styles.profileHeader}><Image source={require("@/assets/images/icon.png")} style={styles.profileIcon} /><View style={styles.profileCopy}><Text style={styles.heading}>我的飞鸿影院</Text><Text numberOfLines={1} style={styles.lead}>{activeSource?.displayName || "本地影视内容库"}</Text></View></View>
         <View style={styles.overviewList}><Pressable onPress={() => router.navigate("/history" as never)} style={({ pressed }) => [styles.overviewCard, pressed && styles.pressed]}><View style={styles.overviewIcon}><Text style={styles.overviewGlyph}>◷</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>观看记录</Text><Text style={styles.overviewText}>{cache.history ? `${cache.history} 条记录，可继续观看` : "暂无观看记录"}</Text></View><Text style={styles.overviewArrow}>›</Text></Pressable><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.overviewCard, styles.downloadOverview, pressed && styles.pressed]}><View style={[styles.overviewIcon, styles.downloadOverviewIcon]}><Text style={[styles.overviewGlyph, styles.downloadOverviewGlyph]}>↓</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>已下载剧集</Text><Text style={styles.overviewText}>{cache.offlineCount ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : "暂无已下载剧集"}</Text></View><Text style={[styles.overviewArrow, styles.downloadOverviewGlyph]}>›</Text></Pressable></View>
         <View style={styles.preferenceCard}><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>仅在 Wi‑Fi 下载</Text><Text style={styles.preferenceText}>{settings?.wifiOnly ? "开启后不会使用移动数据下载剧集" : "已允许使用移动数据下载"}</Text></View><View style={[styles.preferencePill, settings?.wifiOnly && styles.preferencePillActive]}><Text style={styles.preferencePillText}>{settings?.wifiOnly ? "已开启" : "已关闭"}</Text></View></View><View style={styles.preferenceDivider} /><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>最大缓存容量</Text><Text style={styles.preferenceText}>当前 {formatBytes(cache.offlineBytes)} / {settings ? formatStorageLimit(settings.storageLimitBytes) : "—"}</Text></View><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.preferenceLink, pressed && styles.pressed]}><Text style={styles.preferenceLinkText}>管理 ›</Text></Pressable></View></View>
+        <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类页翻页模式</Text><Text style={styles.paginationText}>选择分类内容滚动到末尾时的加载方式。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载更多</Text></Pressable></View></View>
         <View style={styles.section}>
           <Text style={styles.label}>MACCMS 站点域名</Text>
           <TextInput value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} />
@@ -128,17 +137,18 @@ export default function SettingsScreen() {
                   <Pressable onPress={() => setEditingSourceId(null)} style={({ pressed }) => [styles.renameCancel, pressed && styles.pressed]}><Text style={styles.miniActionText}>取消</Text></Pressable>
                 </View>
               ) : (
-                <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
-                  <View style={[styles.healthDot, source.health === "healthy" ? styles.healthGood : source.health === "unhealthy" ? styles.healthBad : styles.healthUnknown]} />
-                  <View style={styles.sourceInfo}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text numberOfLines={1} style={styles.sourceMeta}>{source.endpoint.inputDomain} · {source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
-                  {endpoint?.apiUrl === source.id ? <Text style={styles.currentTag}>当前</Text> : null}
-                </Pressable>
+                <View style={styles.sourceTop}>
+                  <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
+                    <View style={[styles.sourceMark, endpoint?.apiUrl === source.id && styles.sourceMarkActive]}><Text style={styles.sourceMarkText}>{endpoint?.apiUrl === source.id ? "✓" : "•"}</Text></View>
+                    <View style={styles.sourceInfo}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={styles.sourceStatus}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                  </Pressable>
+                  <Pressable accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed]}><Text style={styles.editSourceGlyph}>✎</Text></Pressable>
+                </View>
               )}
               <View style={styles.sourceActions}>
-                <Pressable onPress={() => beginRename(source)} style={({ pressed }) => [styles.miniAction, pressed && styles.pressed]}><Text style={styles.miniActionText}>改名</Text></Pressable>
                 <Pressable onPress={() => void reorderSource(source.id, -1)} disabled={index === 0} style={({ pressed }) => [styles.miniAction, index === 0 && styles.disabled, pressed && styles.pressed]}><Text style={styles.miniActionText}>上移</Text></Pressable>
                 <Pressable onPress={() => void reorderSource(source.id, 1)} disabled={index === sources.length - 1} style={({ pressed }) => [styles.miniAction, index === sources.length - 1 && styles.disabled, pressed && styles.pressed]}><Text style={styles.miniActionText}>下移</Text></Pressable>
-                <Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id} style={({ pressed }) => [styles.miniAction, (pressed || checkingId === source.id) && styles.pressed]}>{checkingId === source.id ? <ActivityIndicator color="#B7D6F7" size="small" /> : <Text style={styles.miniActionText}>检测</Text>}</Pressable>
+                <Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id} style={({ pressed }) => [styles.checkAction, (pressed || checkingId === source.id) && styles.pressed]}>{checkingId === source.id ? <ActivityIndicator color="#FFCD75" size="small" /> : <Text style={styles.checkActionText}>检测连接</Text>}</Pressable>
                 <Pressable onPress={() => confirmDeleteSource(source)} style={({ pressed }) => [styles.miniAction, styles.removeAction, pressed && styles.pressed]}><Text style={styles.removeActionText}>删除</Text></Pressable>
               </View>
             </View>
@@ -201,7 +211,15 @@ const styles = StyleSheet.create({
   preferencePillText: { color: "#F4D393", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   preferenceDivider: { height: StyleSheet.hairlineWidth, backgroundColor: "#344058", marginVertical: 13 },
   preferenceLink: { height: 31, paddingHorizontal: 9, justifyContent: "center", borderRadius: 8, backgroundColor: "#1F2A3E" },
-  preferenceLinkText: { color: "#F6C36A", fontSize: 11, lineHeight: 16, fontWeight: "900" },
+  preferenceLinkText: { color: "#F6BD5B", fontSize: 12, lineHeight: 18, fontWeight: "900" },
+  paginationCard: { marginHorizontal: 18, marginTop: 12, padding: 15, borderRadius: 17, backgroundColor: "#171F30", borderWidth: 1, borderColor: "#2A3650" },
+  paginationTitle: { color: "#F3F6FB", fontSize: 15, lineHeight: 21, fontWeight: "900" },
+  paginationText: { color: "#9BA8BB", fontSize: 11, lineHeight: 16, marginTop: 3 },
+  paginationOptions: { flexDirection: "row", gap: 9, marginTop: 13 },
+  paginationOption: { flex: 1, height: 37, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#20293A", borderWidth: 1, borderColor: "#36435B" },
+  paginationOptionActive: { backgroundColor: "#FFB84D", borderColor: "#FFB84D" },
+  paginationOptionText: { color: "#C3CEDD", fontSize: 11, lineHeight: 16, fontWeight: "900" },
+  paginationOptionTextActive: { color: "#151821" },
   section: { marginTop: 22, padding: 16, borderRadius: 16, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#283452" },
   label: { color: "#DCE2EE", fontWeight: "700", fontSize: 13, lineHeight: 19, marginBottom: 9 },
   input: { height: 47, borderRadius: 11, borderWidth: 1, borderColor: "#344464", backgroundColor: "#0F1729", color: "#F6F7FB", fontSize: 14, paddingHorizontal: 12, paddingVertical: 0 },
@@ -213,25 +231,29 @@ const styles = StyleSheet.create({
   sourceHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   sourceIntro: { color: "#8896AD", fontSize: 11, lineHeight: 16, marginTop: -6, marginBottom: 10 },
   sourceCount: { color: "#F5C66E", fontSize: 11, lineHeight: 16, fontWeight: "800", backgroundColor: "#2A2533", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  sourceItem: { backgroundColor: "#0F1729", borderWidth: 1, borderColor: "#2C3953", borderRadius: 11, marginTop: 8, padding: 10 },
-  sourceItemActive: { borderColor: "#C99037", backgroundColor: "#1C2133" },
-  sourceMain: { flexDirection: "row", alignItems: "center", gap: 8 },
-  healthDot: { width: 8, height: 8, borderRadius: 4 },
-  healthGood: { backgroundColor: "#69C89B" },
-  healthBad: { backgroundColor: "#E27878" },
-  healthUnknown: { backgroundColor: "#9AA8BC" },
+  sourceItem: { backgroundColor: "#11192A", borderWidth: 1, borderColor: "#2C3953", borderRadius: 16, marginTop: 10, padding: 14 },
+  sourceItemActive: { borderColor: "#D99D40", backgroundColor: "#171D2D" },
+  sourceTop: { flexDirection: "row", alignItems: "center", gap: 11 },
+  sourceMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: 11, minWidth: 0 },
+  sourceMark: { width: 42, height: 42, borderRadius: 13, justifyContent: "center", alignItems: "center", backgroundColor: "#27334A" },
+  sourceMarkActive: { backgroundColor: "#FFB84D" },
+  sourceMarkText: { color: "#B5C4D9", fontSize: 20, lineHeight: 23, fontWeight: "900" },
   sourceInfo: { flex: 1, minWidth: 0 },
-  sourceName: { color: "#EEF2F8", fontSize: 13, lineHeight: 19, fontWeight: "800" },
-  sourceMeta: { color: "#8E9CB0", fontSize: 10, lineHeight: 15, marginTop: 1 },
+  sourceName: { color: "#F2F5F9", fontSize: 15, lineHeight: 21, fontWeight: "900" },
+  sourceAddress: { color: "#9AA9BE", fontSize: 10, lineHeight: 15, marginTop: 1, fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) },
+  sourceStatus: { color: "#7FD0A4", fontSize: 10, lineHeight: 15, marginTop: 1 },
+  editSourceButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#202A3D", justifyContent: "center", alignItems: "center" },
+  editSourceGlyph: { color: "#D5DFED", fontSize: 18, lineHeight: 21, fontWeight: "900" },
   renameRow: { flexDirection: "row", gap: 7, alignItems: "center" },
   renameInput: { flex: 1, height: 34, borderRadius: 8, borderWidth: 1, borderColor: "#536B92", color: "#F6F7FB", backgroundColor: "#0B1221", fontSize: 12, paddingHorizontal: 9, paddingVertical: 0 },
   renameSave: { height: 30, paddingHorizontal: 9, borderRadius: 7, justifyContent: "center", backgroundColor: "#F5B64B" },
   renameSaveText: { color: "#10182B", fontSize: 10, fontWeight: "900" },
   renameCancel: { height: 30, paddingHorizontal: 8, borderWidth: 1, borderColor: "#3D5577", borderRadius: 7, justifyContent: "center" },
-  currentTag: { color: "#11192B", fontSize: 10, fontWeight: "900", backgroundColor: "#F5B64B", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
-  sourceActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 9 },
+  sourceActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 13 },
   miniAction: { minWidth: 48, height: 27, paddingHorizontal: 9, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#3D5577", borderRadius: 7 },
   miniActionText: { color: "#B7D6F7", fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  checkAction: { flex: 1, height: 33, borderRadius: 9, justifyContent: "center", alignItems: "center", backgroundColor: "#202A3D" },
+  checkActionText: { color: "#F7C66A", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   removeAction: { borderColor: "#70414D" },
   removeActionText: { color: "#E8A8AF", fontSize: 10, lineHeight: 14, fontWeight: "800" },
   endpoint: { color: "#A6CEF6", fontSize: 12, lineHeight: 19, fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }), backgroundColor: "#0F1729", padding: 10, borderRadius: 9 },
