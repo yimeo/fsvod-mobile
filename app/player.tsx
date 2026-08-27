@@ -117,12 +117,14 @@ export default function PlayerScreen() {
   };
 
   const returnToDetail = useCallback(() => {
+    persistProgress(player.currentTime);
+    player.pause();
     if (vodId) {
       router.replace({ pathname: "/vod/[id]", params: { id: vodId } } as never);
       return;
     }
     router.back();
-  }, [router, vodId]);
+  }, [persistProgress, player, router, vodId]);
 
   const openEpisode = useCallback(async (targetSource: MacCmsPlaySource, index: number) => {
     const next = targetSource.episodes[index];
