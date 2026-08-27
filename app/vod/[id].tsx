@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   headerIdentity: { flex: 1, minWidth: 0, marginLeft: 10, flexDirection: "row", alignItems: "flex-end", gap: 7 },
   topBrand: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
-  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
+  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0, alignSelf: "center" },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
   heroPoster: { width: "100%", height: 280, borderRadius: 23, marginTop: 10 },

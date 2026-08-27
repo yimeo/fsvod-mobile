@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   brandSourceRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, marginTop: 3, minWidth: 0 },
   brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
-  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
+  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0, alignSelf: "center" },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
   sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 25, marginBottom: 11 },
