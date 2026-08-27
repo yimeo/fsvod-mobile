@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { VodPoster } from "@/components/vod-poster";
+import { buildHistoryPlaybackParams } from "@/lib/history-playback";
 import { fetchVodPage, mergeMacCmsPages, sortVodItems, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
-import { getOfflineDownload } from "@/lib/offline-downloads";
 import { getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
@@ -86,9 +86,13 @@ export default function HomeScreen() {
   const continueProgress = latestHistory?.durationSeconds && latestHistory.positionSeconds ? Math.min(100, Math.max(0, Math.round((latestHistory.positionSeconds / latestHistory.durationSeconds) * 100))) : 0;
 
   const resumeHistory = async (entry: WatchHistoryEntry) => {
-    if (!entry.episodeUrl) { router.push({ pathname: "/vod/[id]", params: { id: entry.id } } as never); return; }
-    const offline = await getOfflineDownload(entry.episodeUrl);
-    router.push({ pathname: "/player", params: { url: offline?.localUri ?? entry.episodeUrl, episodeUrl: entry.episodeUrl, vodId: entry.id, ...(entry.posterUrl ? { posterUrl: entry.posterUrl } : {}), title: entry.name, episode: entry.episodeName, source: entry.sourceName, offline: offline ? "1" : "0", episodeIndex: String(entry.episodeIndex ?? 0), playlist: JSON.stringify(entry.playlist ?? []), resumePosition: String(entry.positionSeconds ?? 0) } } as never);
+    if (!endpoint) { setLoadError("请先在“我的”页面配置可用的数据源。"); return; }
+    try {
+      const params = await buildHistoryPlaybackParams(entry, endpoint);
+      router.push({ pathname: "/player", params } as never);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "无法恢复该剧集的播放位置");
+    }
   };
 
   if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#FFB84D" size="large" /></ScreenContainer>;

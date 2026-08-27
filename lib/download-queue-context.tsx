@@ -2,7 +2,7 @@ import * as Network from "expo-network";
 import { AppState, type AppStateStatus, Platform } from "react-native";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
-import { downloadEpisodeOffline, getOfflineSummary, isOfflineDownloadSupported, pauseOfflineDownload, removeOfflineDownloadByUrl, stopOfflineDownload, type OfflineDownloadRequest } from "@/lib/offline-downloads";
+import { clearOfflineDownloads, downloadEpisodeOffline, getOfflineSummary, isOfflineDownloadSupported, pauseOfflineDownload, removeOfflineDownloadByUrl, stopOfflineDownload, type OfflineDownloadRequest } from "@/lib/offline-downloads";
 import { getDownloadSettings, getQueueTasks, nextRunnableTask, retryTask, saveDownloadSettings, saveQueueTasks, type DownloadQueueTask, type DownloadSettings, updateQueueTask, upsertQueueTasks } from "@/lib/download-queue";
 
 interface DownloadQueueContextValue {
@@ -16,6 +16,7 @@ interface DownloadQueueContextValue {
   retry: (id: string) => Promise<void>;
   stopTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  clearAllTasks: () => Promise<void>;
   updateSettings: (next: DownloadSettings) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -125,13 +126,19 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
     await removeOfflineDownloadByUrl(task.remoteUrl);
     await commitTasks(tasksRef.current.filter((entry) => entry.id !== id));
   }, [commitTasks]);
+  const clearAllTasks = useCallback(async () => {
+    const currentTasks = [...tasksRef.current];
+    await Promise.all(currentTasks.filter((task) => task.status === "downloading").map((task) => stopOfflineDownload(task.remoteUrl).catch(() => undefined)));
+    await clearOfflineDownloads();
+    await commitTasks([]);
+  }, [commitTasks]);
   const updateSettings = useCallback(async (next: DownloadSettings) => {
     settingsRef.current = next;
     setSettings(next);
     await saveDownloadSettings(next);
   }, []);
 
-  return <DownloadQueueContext.Provider value={{ tasks, settings, isWifi, isActive, enqueue, pauseTask, resumeTask, retry, stopTask, deleteTask, updateSettings, refresh }}>{children}</DownloadQueueContext.Provider>;
+  return <DownloadQueueContext.Provider value={{ tasks, settings, isWifi, isActive, enqueue, pauseTask, resumeTask, retry, stopTask, deleteTask, clearAllTasks, updateSettings, refresh }}>{children}</DownloadQueueContext.Provider>;
 }
 
 export function useDownloadQueue(): DownloadQueueContextValue {

@@ -5,11 +5,13 @@ import { useRouter } from "expo-router";
 import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodPoster } from "@/components/vod-poster";
-import { getOfflineDownload } from "@/lib/offline-downloads";
+import { buildHistoryPlaybackParams } from "@/lib/history-playback";
 import { clearWatchHistory, getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
+import { useVodSource } from "@/lib/vod-context";
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const { endpoint } = useVodSource();
   const [history, setHistory] = useState<WatchHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,9 +32,13 @@ export default function HistoryScreen() {
   };
 
   const resumeHistory = async (entry: WatchHistoryEntry) => {
-    if (!entry.episodeUrl) { router.push({ pathname: "/vod/[id]", params: { id: entry.id } } as never); return; }
-    const offline = await getOfflineDownload(entry.episodeUrl);
-    router.push({ pathname: "/player", params: { url: offline?.localUri ?? entry.episodeUrl, episodeUrl: entry.episodeUrl, vodId: entry.id, ...(entry.posterUrl ? { posterUrl: entry.posterUrl } : {}), title: entry.name, episode: entry.episodeName, source: entry.sourceName, offline: offline ? "1" : "0", episodeIndex: String(entry.episodeIndex ?? 0), playlist: JSON.stringify(entry.playlist ?? []), resumePosition: String(entry.positionSeconds ?? 0) } } as never);
+    if (!endpoint) { Alert.alert("无法继续播放", "请先在“我的”页面配置可用的数据源。"); return; }
+    try {
+      const params = await buildHistoryPlaybackParams(entry, endpoint);
+      router.push({ pathname: "/player", params } as never);
+    } catch (error) {
+      Alert.alert("无法继续播放", error instanceof Error ? error.message : "该记录暂时无法恢复播放位置。");
+    }
   };
 
   return <View style={styles.page}><ScreenContainer containerClassName="bg-background"><FlatList data={history} keyExtractor={(item, index) => `${item.id}-${item.episodeName}-${item.watchedAt}-${index}`} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} ListHeaderComponent={<View style={styles.header}><View><Text style={styles.eyebrow}>WATCH HISTORY</Text><Text style={styles.heading}>观看记录</Text><Text style={styles.lead}>{history.length ? `共 ${history.length} 条记录，选择影片即可继续观看。` : "最近看过的影片会保存在本机。"}</Text></View><Pressable disabled={!history.length} onPress={confirmClear} style={({ pressed }) => [styles.clearButton, !history.length && styles.disabled, pressed && styles.pressed]}><Text style={styles.clearText}>清空</Text></Pressable></View>} renderItem={({ item }) => <Pressable onPress={() => void resumeHistory(item)} style={({ pressed }) => [styles.item, pressed && styles.pressed]}><VodPoster title={item.name} url={item.posterUrl} style={styles.poster} /><View style={styles.itemCopy}><Text numberOfLines={2} style={styles.itemTitle}>{item.name}</Text><Text numberOfLines={1} style={styles.itemMeta}>{item.sourceName} · {item.episodeName || "影视内容"}</Text><Text style={styles.itemTime}>{item.positionSeconds ? `已看到 ${formatDuration(item.positionSeconds)} · ` : ""}{formatWatchedAt(item.watchedAt)}</Text></View><Text style={styles.itemArrow}>›</Text></Pressable>} ListEmptyComponent={isLoading ? <View style={styles.loading}><ActivityIndicator size="large" color="#FFB84D" /></View> : <View style={styles.empty}><Text style={styles.emptyGlyph}>◷</Text><Text style={styles.emptyTitle}>暂无观看记录</Text><Text style={styles.emptyText}>开始播放影片后，记录会自动出现在这里。</Text><Pressable onPress={() => router.navigate("/" as never)} style={({ pressed }) => [styles.homeButton, pressed && styles.pressed]}><Text style={styles.homeText}>去首页浏览</Text></Pressable></View>} refreshControl={undefined} /></ScreenContainer><GlobalBottomNavigation /></View>;

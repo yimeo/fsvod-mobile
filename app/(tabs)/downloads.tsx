@@ -1,5 +1,7 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Alert } from "react-native";
+
 import { ScreenContainer } from "@/components/screen-container";
 import { formatStorageLimit, type DownloadQueueTask } from "@/lib/download-queue";
 import { useDownloadQueue } from "@/lib/download-queue-context";
@@ -8,9 +10,16 @@ const LIMITS = [5, 20, 50, 100].map((gigabytes) => gigabytes * 1024 * 1024 * 102
 const UNLIMITED = 0;
 
 export default function DownloadsScreen() {
-  const { tasks, settings, isWifi, isActive, pauseTask, resumeTask, retry, stopTask, deleteTask, updateSettings } = useDownloadQueue();
+  const { tasks, settings, isWifi, isActive, pauseTask, resumeTask, retry, stopTask, deleteTask, clearAllTasks, updateSettings } = useDownloadQueue();
   const actionableTasks = tasks;
   const completedCount = tasks.filter((task) => task.status === "completed").length;
+  const clearQueue = () => {
+    if (!tasks.length) return;
+    Alert.alert("清空下载队列", "将停止正在下载的任务，并删除队列中所有剧集的本地离线文件。此操作无法撤销。", [
+      { text: "取消", style: "cancel" },
+      { text: "清空", style: "destructive", onPress: () => { void clearAllTasks(); } },
+    ]);
+  };
 
   return (
     <ScreenContainer containerClassName="bg-background">
@@ -32,7 +41,7 @@ export default function DownloadsScreen() {
             <Text style={styles.settingsTitle}>离线存储上限</Text>
             <View style={styles.limitRow}>{[...LIMITS, UNLIMITED].map((limit) => <Pressable key={limit} onPress={() => settings && void updateSettings({ ...settings, storageLimitBytes: limit })} style={({ pressed }) => [styles.limitChip, settings?.storageLimitBytes === limit && styles.limitChipActive, pressed && styles.pressed]}><Text style={[styles.limitText, settings?.storageLimitBytes === limit && styles.limitTextActive]}>{formatStorageLimit(limit)}</Text></Pressable>)}</View>
           </View>
-          <View style={styles.queueHead}><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个进行中 · {completedCount} 个已完成</Text></View>
+          <View style={styles.queueHead}><View><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个进行中 · {completedCount} 个已完成</Text></View><Pressable disabled={!actionableTasks.length} onPress={clearQueue} style={({ pressed }) => [styles.clearButton, !actionableTasks.length && styles.disabled, pressed && styles.pressed]}><Text style={styles.clearButtonText}>清空</Text></Pressable></View>
         </View>}
         renderItem={({ item }) => <TaskCard task={item} onPause={() => void pauseTask(item.id)} onResume={() => void resumeTask(item.id)} onRetry={() => void retry(item.id)} onStop={() => void stopTask(item.id)} onDelete={() => void deleteTask(item.id)} />}
         ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyTitle}>下载队列为空</Text><Text style={styles.emptyText}>在影片详情页点击“下载本线路”，即可把整部剧集加入离线队列。</Text></View>}
@@ -75,9 +84,11 @@ const styles = StyleSheet.create({
   limitChipActive: { backgroundColor: "#F5B64B", borderColor: "#F5B64B" },
   limitText: { color: "#B6C3D6", fontSize: 12, fontWeight: "800" },
   limitTextActive: { color: "#11192B" },
-  queueHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginTop: 22, marginBottom: 10 },
+  queueHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 22, marginBottom: 10 },
   sectionTitle: { color: "#F6F7FB", fontWeight: "800", fontSize: 17, lineHeight: 24 },
   queueMeta: { color: "#8D9CB2", fontSize: 11, lineHeight: 16 },
+  clearButton: { minWidth: 49, height: 29, paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: "#72404A", justifyContent: "center", alignItems: "center" },
+  clearButtonText: { color: "#E6A5AD", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   taskCard: { borderRadius: 14, padding: 13, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#283452", marginBottom: 9 },
   taskTop: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
   taskInfo: { flex: 1, minWidth: 0 },
@@ -98,5 +109,6 @@ const styles = StyleSheet.create({
   emptyTitle: { color: "#EAF0F8", fontSize: 16, lineHeight: 23, fontWeight: "800" },
   emptyText: { color: "#98A6BA", fontSize: 12, lineHeight: 19, textAlign: "center", marginTop: 6 },
   footer: { color: "#8F9CB2", fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 8 },
+  disabled: { opacity: 0.4 },
   pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] },
 });
