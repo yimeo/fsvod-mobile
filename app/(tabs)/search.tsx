@@ -37,7 +37,7 @@ export default function SearchScreen() {
     try {
       const pageSize = pageMode === "classic" ? classicPageSize : 20;
       const result = await fetchVodPage(endpoint, { page: requestedPage, pageSize, keyword });
-      const pageItems = pageMode === "classic" ? result.items.slice(0, classicPageSize) : result.items;
+      const pageItems = result.items.slice(0, pageSize);
       setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
       setPage(result.page);
       setPageCount(result.pageCount);

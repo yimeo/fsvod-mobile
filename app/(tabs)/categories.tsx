@@ -54,7 +54,7 @@ export default function CategoriesScreen() {
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([root, ...root.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: category.id }))))
         : await fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: selectedTypeId });
-      const pageItems = pageMode === "classic" ? result.items.slice(0, classicPageSize) : result.items;
+      const pageItems = result.items.slice(0, pageSize);
       setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
       setPage(result.page);
       setPageCount(result.pageCount);

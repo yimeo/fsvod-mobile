@@ -11,6 +11,7 @@ import { getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
+const HOME_PAGE_SIZE = 20;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -56,9 +57,10 @@ export default function HomeScreen() {
     try {
       const shouldAggregateChildren = activeTypeId === selectedRoot.id && selectedRoot.children.length > 0;
       const result = shouldAggregateChildren
-        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id, sort: sortMode }))))
-        : await fetchVodPage(endpoint, { page: requestedPage, typeId: activeTypeId || selectedRoot.id, sort: sortMode });
-      setItems((current) => sortVodItems(append ? [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))] : result.items, sortMode));
+        ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize: HOME_PAGE_SIZE, typeId: category.id, sort: sortMode }))))
+        : await fetchVodPage(endpoint, { page: requestedPage, pageSize: HOME_PAGE_SIZE, typeId: activeTypeId || selectedRoot.id, sort: sortMode });
+      const pageItems = result.items.slice(0, HOME_PAGE_SIZE);
+      setItems((current) => sortVodItems(append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems, sortMode));
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
