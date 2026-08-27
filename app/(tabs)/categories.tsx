@@ -6,7 +6,7 @@ import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
-import { getCategoryPageMode, type CategoryPageMode } from "@/lib/vod-storage";
+import { getCategoryClassicPageButtonCount, getCategoryPageMode, type CategoryClassicPageButtonCount, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
@@ -23,6 +23,7 @@ export default function CategoriesScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pageMode, setPageMode] = useState<CategoryPageMode>("manual");
+  const [classicPageButtonCount, setClassicPageButtonCount] = useState<CategoryClassicPageButtonCount>(5);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
@@ -36,7 +37,12 @@ export default function CategoriesScreen() {
     }
   }, [categories, rootId]);
 
-  useFocusEffect(useCallback(() => { void getCategoryPageMode().then(setPageMode); }, []));
+  useFocusEffect(useCallback(() => {
+    void Promise.all([getCategoryPageMode(), getCategoryClassicPageButtonCount()]).then(([mode, count]) => {
+      setPageMode(mode);
+      setClassicPageButtonCount(count);
+    });
+  }, []));
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedTypeId) return;
@@ -47,7 +53,8 @@ export default function CategoriesScreen() {
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([root, ...root.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, typeId: category.id }))))
         : await fetchVodPage(endpoint, { page: requestedPage, typeId: selectedTypeId });
-      setItems((current) => append ? [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))] : result.items);
+      const pageItems = pageMode === "classic" ? result.items.slice(0, 20) : result.items;
+      setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
@@ -55,7 +62,7 @@ export default function CategoriesScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [endpoint, root, selectedTypeId]);
+  }, [endpoint, pageMode, root, selectedTypeId]);
 
   useEffect(() => { if (selectedTypeId) void loadPage(1); }, [loadPage, selectedTypeId]);
 
@@ -89,22 +96,22 @@ export default function CategoriesScreen() {
     {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
 
-  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : pageMode === "classic" && pageCount > 1 ? <ClassicPager page={page} pageCount={pageCount} onChange={goToClassicPage} /> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
+  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : pageMode === "classic" && pageCount > 1 ? <ClassicPager page={page} pageCount={pageCount} pageButtonCount={classicPageButtonCount} onChange={goToClassicPage} /> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
 }
 
 function CategoryPill({ label, active, small = false, onPress }: { label: string; active: boolean; small?: boolean; onPress: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.pill, small && styles.pillSmall, active && styles.pillActive, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.pillText, small && styles.pillTextSmall, active && styles.pillTextActive]}>{label}</Text></Pressable>;
 }
 
-function ClassicPager({ page, pageCount, onChange }: { page: number; pageCount: number; onChange: (page: number) => void }) {
-  const pageNumbers = getClassicPageNumbers(page, pageCount);
+function ClassicPager({ page, pageCount, pageButtonCount, onChange }: { page: number; pageCount: number; pageButtonCount: CategoryClassicPageButtonCount; onChange: (page: number) => void }) {
+  const pageNumbers = getClassicPageNumbers(page, pageCount, pageButtonCount);
   const control = (label: string, target: number, disabled: boolean, wide = false) => <Pressable key={label} disabled={disabled} onPress={() => onChange(target)} style={({ pressed }) => [styles.pagerButton, wide && styles.pagerWideButton, disabled && styles.pagerDisabled, pressed && styles.pressed]}><Text style={styles.pagerText}>{label}</Text></Pressable>;
   return <View style={styles.classicPager}>{control("首页", 1, page === 1, true)}{control("上一页", page - 1, page === 1, true)}{pageNumbers.map((number) => <Pressable key={number} onPress={() => onChange(number)} style={({ pressed }) => [styles.pagerButton, number === page && styles.pagerButtonActive, pressed && styles.pressed]}><Text style={[styles.pagerText, number === page && styles.pagerTextActive]}>{number}</Text></Pressable>)}{control("下一页", page + 1, page === pageCount, true)}{control("尾页", pageCount, page === pageCount, true)}</View>;
 }
 
-function getClassicPageNumbers(page: number, pageCount: number): number[] {
-  const size = Math.min(5, pageCount);
-  const start = Math.max(1, Math.min(page - 2, pageCount - size + 1));
+function getClassicPageNumbers(page: number, pageCount: number, pageButtonCount: CategoryClassicPageButtonCount): number[] {
+  const size = Math.min(pageButtonCount, pageCount);
+  const start = Math.max(1, Math.min(page - Math.floor(size / 2), pageCount - size + 1));
   return Array.from({ length: size }, (_, index) => start + index);
 }
 

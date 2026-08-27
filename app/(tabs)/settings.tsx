@@ -5,7 +5,7 @@ import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { clearLocalVodData, getCategoryPageMode, getLocalCacheSummary, saveCategoryPageMode, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { clearLocalVodData, getCategoryClassicPageButtonCount, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageButtonCount, saveCategoryPageMode, type CategoryClassicPageButtonCount, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 import { useDownloadQueue } from "@/lib/download-queue-context";
@@ -28,6 +28,7 @@ export default function SettingsScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
   const [categoryPageMode, setCategoryPageMode] = useState<CategoryPageMode>("manual");
+  const [classicPageButtonCount, setClassicPageButtonCount] = useState<CategoryClassicPageButtonCount>(5);
   const activeSource = sources.find((source) => source.id === endpoint?.apiUrl);
 
   const loadCacheSummary = useCallback(async () => {
@@ -41,11 +42,21 @@ export default function SettingsScreen() {
     void loadCacheSummary();
   }, [endpoint, loadCacheSummary]);
 
-  useEffect(() => { void getCategoryPageMode().then(setCategoryPageMode); }, []);
+  useEffect(() => {
+    void Promise.all([getCategoryPageMode(), getCategoryClassicPageButtonCount()]).then(([mode, count]) => {
+      setCategoryPageMode(mode);
+      setClassicPageButtonCount(count);
+    });
+  }, []);
 
   const setPageMode = (mode: CategoryPageMode) => {
     setCategoryPageMode(mode);
     void saveCategoryPageMode(mode);
+  };
+
+  const setClassicPageButtons = (count: CategoryClassicPageButtonCount) => {
+    setClassicPageButtonCount(count);
+    void saveCategoryClassicPageButtonCount(count);
   };
 
   const detectAndSave = async () => {
@@ -174,7 +185,7 @@ export default function SettingsScreen() {
           <Pressable onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>清理本地缓存</Text></Pressable>
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
         </View>
-        <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类页翻页模式</Text><Text style={styles.paginationText}>选择分类内容到末尾时的翻页方式。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载</Text></Pressable><Pressable onPress={() => setPageMode("classic")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "classic" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "classic" && styles.paginationOptionTextActive]}>经典模式</Text></Pressable></View></View>
+        <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类页翻页模式</Text><Text style={styles.paginationText}>选择分类内容到末尾时的翻页方式。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载</Text></Pressable><Pressable onPress={() => setPageMode("classic")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "classic" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "classic" && styles.paginationOptionTextActive]}>经典模式</Text></Pressable></View>{categoryPageMode === "classic" ? <View style={styles.classicPageCount}><View><Text style={styles.classicPageCountTitle}>经典页码数量</Text><Text style={styles.classicPageCountText}>分类页每页固定 20 条内容</Text></View><View style={styles.classicPageCountOptions}>{([3, 5, 7] as CategoryClassicPageButtonCount[]).map((count) => <Pressable key={count} onPress={() => setClassicPageButtons(count)} style={({ pressed }) => [styles.classicPageCountOption, classicPageButtonCount === count && styles.classicPageCountOptionActive, pressed && styles.pressed]}><Text style={[styles.classicPageCountOptionText, classicPageButtonCount === count && styles.classicPageCountOptionTextActive]}>{count}</Text></Pressable>)}</View></View> : null}</View>
         <View style={styles.note}><Text style={styles.noteTitle}>播放说明</Text><Text style={styles.noteText}>支持直接播放的常见 MP4、M3U8 等地址会进入原生播放器。其他网页型地址会保留清晰提示，以便你在浏览器中打开。</Text></View>
       </ScrollView>
       <Modal visible={isAddModalVisible} transparent animationType="fade" onRequestClose={() => setIsAddModalVisible(false)}>
@@ -235,6 +246,14 @@ const styles = StyleSheet.create({
   paginationOptionActive: { backgroundColor: "#FFB84D", borderColor: "#FFB84D" },
   paginationOptionText: { color: "#C3CEDD", fontSize: 10, lineHeight: 15, fontWeight: "900" },
   paginationOptionTextActive: { color: "#151821" },
+  classicPageCount: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 14, paddingTop: 13, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#35425B" },
+  classicPageCountTitle: { color: "#E7EDF6", fontSize: 12, lineHeight: 18, fontWeight: "900" },
+  classicPageCountText: { color: "#8F9DB1", fontSize: 10, lineHeight: 15, marginTop: 1 },
+  classicPageCountOptions: { flexDirection: "row", gap: 6 },
+  classicPageCountOption: { width: 31, height: 31, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: "#20293A", borderWidth: 1, borderColor: "#36435B" },
+  classicPageCountOptionActive: { backgroundColor: "#FFB84D", borderColor: "#FFB84D" },
+  classicPageCountOptionText: { color: "#C3CEDD", fontSize: 11, lineHeight: 15, fontWeight: "900" },
+  classicPageCountOptionTextActive: { color: "#151821" },
   section: { marginTop: 22, padding: 16, borderRadius: 16, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#283452" },
   label: { color: "#DCE2EE", fontWeight: "700", fontSize: 13, lineHeight: 19, marginBottom: 9 },
   addressLabel: { marginTop: 13 },

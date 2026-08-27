@@ -11,8 +11,10 @@ const HISTORY_KEY = `${PREFIX}history`;
 const CATEGORY_ORDER_KEY = `${PREFIX}category-order`;
 const PLAY_SOURCE_FAVORITES_KEY = `${PREFIX}play-source-favorites`;
 const CATEGORY_PAGE_MODE_KEY = `${PREFIX}category-page-mode`;
+const CATEGORY_CLASSIC_PAGE_BUTTON_COUNT_KEY = `${PREFIX}category-classic-page-button-count`;
 
 export type CategoryPageMode = "auto" | "manual" | "classic";
+export type CategoryClassicPageButtonCount = 3 | 5 | 7;
 
 export interface WatchHistoryEntry {
   id: string;
@@ -176,6 +178,15 @@ export async function getCategoryPageMode(): Promise<CategoryPageMode> {
 
 export function saveCategoryPageMode(mode: CategoryPageMode): Promise<void> {
   return AsyncStorage.setItem(CATEGORY_PAGE_MODE_KEY, JSON.stringify(mode));
+}
+
+export async function getCategoryClassicPageButtonCount(): Promise<CategoryClassicPageButtonCount> {
+  const count = await getJson<number>(CATEGORY_CLASSIC_PAGE_BUTTON_COUNT_KEY, 5);
+  return count === 3 || count === 7 ? count : 5;
+}
+
+export function saveCategoryClassicPageButtonCount(count: CategoryClassicPageButtonCount): Promise<void> {
+  return AsyncStorage.setItem(CATEGORY_CLASSIC_PAGE_BUTTON_COUNT_KEY, JSON.stringify(count));
 }
 
 export function getFavoritePlaySources(): Promise<string[]> {
