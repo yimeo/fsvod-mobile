@@ -102,7 +102,7 @@ export default function CategoriesScreen() {
 
   const listHeader = <View>
     <Text style={styles.heading}>分类浏览</Text>
-    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></View>
+    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><View style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></View></View>
     <View style={styles.sectionHead}><Text style={styles.sectionTitle}>主分类</Text><Text style={styles.sectionMeta}>{categories.length} 个分类</Text></View>
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rootList} renderItem={({ item }) => <CategoryPill label={item.name} active={item.id === root.id} onPress={() => chooseRoot(item.id)} />} />
     {root.children.length ? <><View style={styles.sectionHead}><Text style={styles.sectionTitle}>{root.name}的子分类</Text><Text style={styles.sectionMeta}>{root.children.length} 个子分类</Text></View><FlatList horizontal data={childChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childList} renderItem={({ item }) => <CategoryPill label={item.name} small active={item.id === selectedTypeId} onPress={() => setChildId(item.id)} />} /></> : null}
@@ -134,8 +134,9 @@ const styles = StyleSheet.create({
   heading: { color: "#F8FAFC", fontSize: 30, lineHeight: 38, fontWeight: "900", letterSpacing: -0.7 },
   brandSourceRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, marginTop: 3, minWidth: 0 },
   brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
+  sourceIdentity: { flexDirection: "row", alignItems: "center", gap: 7, minWidth: 0, flexShrink: 1 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
-  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0, alignSelf: "center" },
+  sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
   sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 25, marginBottom: 11 },
