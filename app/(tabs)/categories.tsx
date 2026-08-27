@@ -23,7 +23,7 @@ export default function CategoriesScreen() {
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
-  const childChoices = useMemo(() => root.id ? [{ id: root.id, name: `聚合全部${root.name}`, parentId: null, children: [] }, ...root.children] : [], [root]);
+  const childChoices = useMemo(() => root.children.length ? [{ id: root.id, name: "全部", parentId: null, children: [] }, ...root.children] : [], [root]);
 
   useEffect(() => {
     if (categories.length && !categories.some((category) => category.id === rootId)) {
@@ -72,7 +72,7 @@ export default function CategoriesScreen() {
     <Text style={styles.brandHint}>飞鸿影院</Text>
     <View style={styles.sectionHead}><Text style={styles.sectionTitle}>主分类</Text><Text style={styles.sectionMeta}>{categories.length} 个分类</Text></View>
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rootList} renderItem={({ item }) => <CategoryPill label={item.name} active={item.id === root.id} onPress={() => chooseRoot(item.id)} />} />
-    {root.id ? <><View style={styles.sectionHead}><Text style={styles.sectionTitle}>{root.name}的子分类</Text><Text style={styles.sectionMeta}>聚合一级 + {root.children.length} 个子分类</Text></View><FlatList horizontal data={childChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childList} renderItem={({ item }) => <CategoryPill label={item.name} small active={item.id === selectedTypeId} onPress={() => setChildId(item.id)} />} /></> : null}
+    {root.children.length ? <><View style={styles.sectionHead}><Text style={styles.sectionTitle}>{root.name}的子分类</Text><Text style={styles.sectionMeta}>{root.children.length} 个子分类</Text></View><FlatList horizontal data={childChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childList} renderItem={({ item }) => <CategoryPill label={item.name} small active={item.id === selectedTypeId} onPress={() => setChildId(item.id)} />} /></> : null}
     <View style={styles.contentHead}><View><Text style={styles.contentTitle}>{childId === root.id ? root.name : childChoices.find((item) => item.id === childId)?.name || root.name}</Text><Text style={styles.contentMeta}>共展示 {items.length} 部影片</Text></View>{isLoading ? <ActivityIndicator size="small" color="#FFB84D" /> : null}</View>
     {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
