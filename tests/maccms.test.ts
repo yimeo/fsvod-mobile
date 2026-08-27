@@ -36,6 +36,24 @@ describe("MACCMS 数据适配", () => {
     });
   });
 
+  it("规范化相对海报、协议省略海报和同域 HTTP 海报地址", () => {
+    const page = parseMacCmsPage({
+      code: 1,
+      list: [
+        { vod_id: 1, vod_name: "相对海报", vod_pic: "uploads/one.jpg" },
+        { vod_id: 2, vod_name: "协议省略", vod_pic: "//image.example.com/two.jpg" },
+        { vod_id: 3, vod_name: "同域安全升级", vod_pic: "http://video.example.com/uploads/three.jpg" },
+        { vod_id: 4, vod_name: "缩略图字段", vod_pic: "", vod_pic_thumb: "images/four.jpg" },
+      ],
+    }, endpoint);
+    expect(page.items.map((item) => item.posterUrl)).toEqual([
+      "https://video.example.com/uploads/one.jpg",
+      "https://image.example.com/two.jpg",
+      "https://video.example.com/uploads/three.jpg",
+      "https://video.example.com/images/four.jpg",
+    ]);
+  });
+
   it("将父子分类组织为树形结构", () => {
     const categories = buildCategoryTree(
       [

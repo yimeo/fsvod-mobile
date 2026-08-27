@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { useEffect, useState } from "react";
 
 interface VodPosterProps {
   title: string;
@@ -24,10 +24,11 @@ function generatedTone(title: string): { start: string; end: string } {
 
 export function VodPoster({ title, url, style }: VodPosterProps) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [url]);
   if (url && !failed) {
     return (
       <Image
-        source={url}
+        source={{ uri: url }}
         style={style}
         contentFit="cover"
         cachePolicy="disk"

@@ -86,6 +86,10 @@ function cleanText(value: unknown): string {
     .trim();
 }
 
+function firstNonEmpty(...values: unknown[]): unknown {
+  return values.find((value) => Boolean(text(value)));
+}
+
 export function normalizeDomain(input: string): string {
   const value = input.trim();
   if (!value) throw new Error("请输入数据源域名");
@@ -131,12 +135,22 @@ async function getJson(url: string): Promise<RecordValue> {
 }
 
 function resolveUrl(value: unknown, apiUrl: string): string | null {
-  const source = text(value);
+  const source = text(value).replace(/^['"\s]+|['"\s]+$/g, "");
   if (!source) return null;
-  if (/^https?:\/\//i.test(source)) return source;
-  if (source.startsWith("//")) return `https:${source}`;
+  const api = new URL(apiUrl);
+  if (/^https?:\/\//i.test(source)) {
+    try {
+      const result = new URL(source);
+      if (api.protocol === "https:" && result.protocol === "http:" && result.host === api.host) result.protocol = "https:";
+      return result.toString();
+    } catch {
+      return null;
+    }
+  }
+  if (source.startsWith("//")) return `${api.protocol}${source}`;
   try {
-    return new URL(source, apiUrl).toString();
+    const normalizedPath = source.replace(/^\.\//, "");
+    return new URL(normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`, api.origin).toString();
   } catch {
     return null;
   }
@@ -158,7 +172,7 @@ function mapVod(value: unknown, apiUrl: string): MacCmsVod | null {
     year: text(value.vod_year ?? value.year),
     area: text(value.vod_area ?? value.area),
     language: text(value.vod_lang ?? value.lang),
-    posterUrl: resolveUrl(value.vod_pic ?? value.pic, apiUrl),
+    posterUrl: resolveUrl(firstNonEmpty(value.vod_pic, value.vod_pic_thumb, value.vod_pic_slide, value.vod_pic_url, value.pic, value.pic_url, value.cover), apiUrl),
     updateTime: text(value.vod_time ?? value.last),
   };
 }
