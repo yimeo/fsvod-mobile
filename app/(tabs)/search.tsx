@@ -19,7 +19,7 @@ export default function SearchScreen() {
   const [pageCount, setPageCount] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pageMode, setPageMode] = useState<CategoryPageMode>("manual");
+  const [pageMode, setPageMode] = useState<CategoryPageMode>("auto");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
 
