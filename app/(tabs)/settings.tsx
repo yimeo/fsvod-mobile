@@ -15,7 +15,7 @@ interface CacheSummary { playbackLists: number; searches: number; history: numbe
 
 export default function SettingsScreen() {
   const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, renameSource, reorderSource, sourceError } = useVodSource();
-  const { tasks, settings, isWifi } = useDownloadQueue();
+  const { settings } = useDownloadQueue();
   const router = useRouter();
   const [domain, setDomain] = useState(endpoint?.inputDomain ?? "");
   const [isSaving, setIsSaving] = useState(false);
@@ -156,11 +156,6 @@ export default function SettingsScreen() {
           </View>
           <Pressable onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>清理本地缓存</Text></Pressable>
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
-        </View>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>下载中心</Text>
-          <Text style={styles.meta}>{isWifi ? "当前已连接 Wi‑Fi" : "当前未连接 Wi‑Fi"} · {tasks.filter((task) => task.status !== "completed").length} 个待处理任务 · 上限 {settings ? formatStorageLimit(settings.storageLimitBytes) : "加载中"}</Text>
-          <Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>管理下载队列</Text></Pressable>
         </View>
         <View style={styles.note}><Text style={styles.noteTitle}>播放说明</Text><Text style={styles.noteText}>支持直接播放的常见 MP4、M3U8 等地址会进入原生播放器。其他网页型地址会保留清晰提示，以便你在浏览器中打开。</Text></View>
       </ScrollView>
