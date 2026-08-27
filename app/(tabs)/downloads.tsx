@@ -1,18 +1,33 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Alert } from "react-native";
+import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { formatStorageLimit, type DownloadQueueTask } from "@/lib/download-queue";
 import { useDownloadQueue } from "@/lib/download-queue-context";
+import { getOfflineDownload } from "@/lib/offline-downloads";
 
 const LIMITS = [5, 20, 50, 100].map((gigabytes) => gigabytes * 1024 * 1024 * 1024);
 const UNLIMITED = 0;
 
 export default function DownloadsScreen() {
+  const router = useRouter();
   const { tasks, settings, isWifi, isActive, pauseTask, resumeTask, retry, stopTask, deleteTask, clearAllTasks, updateSettings } = useDownloadQueue();
   const actionableTasks = tasks;
   const completedCount = tasks.filter((task) => task.status === "completed").length;
+  const openDetail = (task: DownloadQueueTask) => {
+    router.push({ pathname: "/vod/[id]", params: { id: task.vodId } } as never);
+  };
+  const playDownloaded = async (task: DownloadQueueTask) => {
+    const offline = await getOfflineDownload(task.remoteUrl);
+    if (!offline) {
+      Alert.alert("本地文件不可用", "该剧集的离线文件不存在或已被清理，请重新下载后播放。");
+      return;
+    }
+    const episode = { name: task.episodeName, url: task.remoteUrl };
+    router.push({ pathname: "/player", params: { url: offline.localUri, episodeUrl: task.remoteUrl, vodId: task.vodId, title: task.vodName, episode: task.episodeName, source: task.sourceName, offline: "1", episodeIndex: "0", playlist: JSON.stringify([episode]), playSources: JSON.stringify([{ name: task.sourceName, episodes: [episode] }]) } } as never);
+  };
   const clearQueue = () => {
     if (!tasks.length) return;
     Alert.alert("清空下载队列", "将停止正在下载的任务，并删除队列中所有剧集的本地离线文件。此操作无法撤销。", [
@@ -41,20 +56,20 @@ export default function DownloadsScreen() {
             <Text style={styles.settingsTitle}>离线存储上限</Text>
             <View style={styles.limitRow}>{[...LIMITS, UNLIMITED].map((limit) => <Pressable key={limit} onPress={() => settings && void updateSettings({ ...settings, storageLimitBytes: limit })} style={({ pressed }) => [styles.limitChip, settings?.storageLimitBytes === limit && styles.limitChipActive, pressed && styles.pressed]}><Text style={[styles.limitText, settings?.storageLimitBytes === limit && styles.limitTextActive]}>{formatStorageLimit(limit)}</Text></Pressable>)}</View>
           </View>
-          <View style={styles.queueHead}><View><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个进行中 · {completedCount} 个已完成</Text></View><Pressable disabled={!actionableTasks.length} onPress={clearQueue} style={({ pressed }) => [styles.clearButton, !actionableTasks.length && styles.disabled, pressed && styles.pressed]}><Text style={styles.clearButtonText}>清空</Text></Pressable></View>
+          <View style={styles.queueHead}><View><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个任务 · {completedCount} 个已下载</Text></View><Pressable disabled={!actionableTasks.length} onPress={clearQueue} style={({ pressed }) => [styles.clearButton, !actionableTasks.length && styles.disabled, pressed && styles.pressed]}><Text style={styles.clearButtonText}>清空</Text></Pressable></View>
         </View>}
-        renderItem={({ item }) => <TaskCard task={item} onPause={() => void pauseTask(item.id)} onResume={() => void resumeTask(item.id)} onRetry={() => void retry(item.id)} onStop={() => void stopTask(item.id)} onDelete={() => void deleteTask(item.id)} />}
-        ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyTitle}>下载队列为空</Text><Text style={styles.emptyText}>在影片详情页点击“下载本线路”，即可把整部剧集加入离线队列。</Text></View>}
-        ListFooterComponent={completedCount > 0 ? <Text style={styles.footer}>已完成的剧集可在影片详情页直接离线播放。</Text> : null}
+        renderItem={({ item }) => <TaskCard task={item} onOpenDetail={() => openDetail(item)} onPlayDownloaded={() => void playDownloaded(item)} onPause={() => void pauseTask(item.id)} onResume={() => void resumeTask(item.id)} onRetry={() => void retry(item.id)} onStop={() => void stopTask(item.id)} onDelete={() => void deleteTask(item.id)} />}
+        ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyTitle}>下载队列为空</Text><Text style={styles.emptyText}>在影片详情页的播放列表点击“↓ 下载”，即可将所选剧集加入离线队列。</Text></View>}
+        ListFooterComponent={completedCount > 0 ? <Text style={styles.footer}>已下载剧集可在此直接离线播放；点影片标题可进入介绍页。</Text> : null}
       />
     </ScreenContainer>
   );
 }
 
-function TaskCard({ task, onPause, onResume, onRetry, onStop, onDelete }: { task: DownloadQueueTask; onPause: () => void; onResume: () => void; onRetry: () => void; onStop: () => void; onDelete: () => void }) {
+function TaskCard({ task, onOpenDetail, onPlayDownloaded, onPause, onResume, onRetry, onStop, onDelete }: { task: DownloadQueueTask; onOpenDetail: () => void; onPlayDownloaded: () => void; onPause: () => void; onResume: () => void; onRetry: () => void; onStop: () => void; onDelete: () => void }) {
   const progress = task.progress?.fraction !== null && task.progress?.fraction !== undefined ? Math.round(task.progress.fraction * 100) : null;
-  const label = task.status === "completed" ? "已完成" : task.status === "downloading" ? (progress === null ? "下载中" : `${progress}%`) : task.status === "queued" ? "队列中" : task.status === "paused" ? "已暂停" : "下载失败";
-  return <View style={styles.taskCard}><View style={styles.taskTop}><View style={styles.taskInfo}><Text numberOfLines={1} style={styles.taskTitle}>{task.vodName}</Text><Text numberOfLines={1} style={styles.taskMeta}>{task.sourceName} · {task.episodeName}</Text></View><Text style={[styles.status, task.status === "failed" && styles.statusFailed, task.status === "paused" && styles.statusPaused]}>{label}</Text></View>{task.status === "downloading" ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress ?? 4}%` }]} /></View> : null}{task.error ? <Text numberOfLines={2} style={styles.taskError}>{task.error}</Text> : null}<View style={styles.taskActions}>{task.status === "downloading" ? <><Action label="暂停" onPress={onPause} /><Action label="停止" onPress={onStop} /></> : null}{task.status === "queued" ? <><Action label="暂停" onPress={onPause} /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "paused" ? <><Action label="继续" onPress={onResume} primary /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "failed" ? <><Action label="重试" onPress={onRetry} primary /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "completed" ? <Action label="删除" onPress={onDelete} /> : null}</View></View>;
+  const label = task.status === "completed" ? "已下载" : task.status === "downloading" ? (progress === null ? "下载中" : `${progress}%`) : task.status === "queued" ? "队列中" : task.status === "paused" ? "已暂停" : "下载失败";
+  return <View style={[styles.taskCard, task.status === "completed" && styles.taskCardCompleted]}><View style={styles.taskTop}><View style={styles.taskInfo}><Pressable accessibilityLabel={`查看${task.vodName}介绍`} onPress={onOpenDetail} style={({ pressed }) => [styles.titleLink, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.taskTitle}>{task.vodName}</Text></Pressable><Text numberOfLines={1} style={styles.taskMeta}>{task.sourceName} · {task.episodeName}</Text></View><Text style={[styles.status, task.status === "failed" && styles.statusFailed, task.status === "paused" && styles.statusPaused]}>{label}</Text></View>{task.status === "completed" ? <View style={styles.offlineNotice}><Text style={styles.offlineNoticeText}>本机已保存，可在无网络时直接播放</Text></View> : null}{task.status === "downloading" ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress ?? 4}%` }]} /></View> : null}{task.error ? <Text numberOfLines={2} style={styles.taskError}>{task.error}</Text> : null}<View style={styles.taskActions}>{task.status === "downloading" ? <><Action label="暂停" onPress={onPause} /><Action label="停止" onPress={onStop} /></> : null}{task.status === "queued" ? <><Action label="暂停" onPress={onPause} /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "paused" ? <><Action label="继续" onPress={onResume} primary /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "failed" ? <><Action label="重试" onPress={onRetry} primary /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "completed" ? <><Action label="离线播放" onPress={onPlayDownloaded} primary /><Action label="删除" onPress={onDelete} /></> : null}</View></View>;
 }
 
 function Action({ label, onPress, primary = false }: { label: string; onPress: () => void; primary?: boolean }) {
@@ -90,13 +105,17 @@ const styles = StyleSheet.create({
   clearButton: { minWidth: 49, height: 29, paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: "#72404A", justifyContent: "center", alignItems: "center" },
   clearButtonText: { color: "#E6A5AD", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   taskCard: { borderRadius: 14, padding: 13, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#283452", marginBottom: 9 },
+  taskCardCompleted: { backgroundColor: "#132B2A", borderColor: "#316A5C" },
   taskTop: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
   taskInfo: { flex: 1, minWidth: 0 },
+  titleLink: { alignSelf: "flex-start", maxWidth: "100%" },
   taskTitle: { color: "#EEF1F6", fontSize: 14, lineHeight: 20, fontWeight: "800" },
   taskMeta: { color: "#8E9CB1", fontSize: 11, lineHeight: 16, marginTop: 2 },
   status: { color: "#9FDABB", backgroundColor: "#1F523F", borderRadius: 7, fontSize: 10, lineHeight: 15, fontWeight: "800", paddingHorizontal: 7, paddingVertical: 2 },
   statusPaused: { color: "#F0CF8A", backgroundColor: "#4A3A20" },
   statusFailed: { color: "#F5B5B5", backgroundColor: "#56313C" },
+  offlineNotice: { marginTop: 9, alignSelf: "flex-start", borderRadius: 7, backgroundColor: "#1B4A3D", paddingHorizontal: 8, paddingVertical: 3 },
+  offlineNoticeText: { color: "#AFE1C1", fontSize: 10, lineHeight: 15, fontWeight: "800" },
   progressTrack: { height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "#0D1424", marginTop: 11 },
   progressFill: { height: "100%", backgroundColor: "#F5B64B" },
   taskError: { color: "#F0B1B7", fontSize: 11, lineHeight: 17, marginTop: 8 },
