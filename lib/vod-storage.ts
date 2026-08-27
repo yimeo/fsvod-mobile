@@ -9,7 +9,6 @@ const DETAIL_PREFIX = `${PREFIX}detail:`;
 const SEARCH_KEY = `${PREFIX}searches`;
 const HISTORY_KEY = `${PREFIX}history`;
 const CATEGORY_ORDER_KEY = `${PREFIX}category-order`;
-const PLAY_SOURCE_FAVORITES_KEY = `${PREFIX}play-source-favorites`;
 const CATEGORY_PAGE_MODE_KEY = `${PREFIX}category-page-mode`;
 const CATEGORY_CLASSIC_PAGE_SIZE_KEY = `${PREFIX}category-classic-page-size`;
 
@@ -203,14 +202,6 @@ export async function getCategoryClassicPageSize(): Promise<CategoryClassicPageS
 
 export function saveCategoryClassicPageSize(size: CategoryClassicPageSize): Promise<void> {
   return AsyncStorage.setItem(CATEGORY_CLASSIC_PAGE_SIZE_KEY, JSON.stringify(size));
-}
-
-export function getFavoritePlaySources(): Promise<string[]> {
-  return getJson<string[]>(PLAY_SOURCE_FAVORITES_KEY, []);
-}
-
-export async function saveFavoritePlaySources(names: string[]): Promise<void> {
-  await AsyncStorage.setItem(PLAY_SOURCE_FAVORITES_KEY, JSON.stringify([...new Set(names.filter(Boolean))]));
 }
 
 export async function saveWatchHistory(entry: WatchHistoryEntry): Promise<WatchHistoryEntry[]> {
