@@ -23,7 +23,7 @@ export interface DownloadSettings {
 
 export const DEFAULT_DOWNLOAD_SETTINGS: DownloadSettings = {
   wifiOnly: true,
-  storageLimitBytes: 20 * 1024 * 1024 * 1024,
+  storageLimitBytes: 50 * 1024 * 1024 * 1024,
 };
 
 export function createQueueTask(request: OfflineDownloadRequest): DownloadQueueTask {

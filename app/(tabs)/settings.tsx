@@ -167,7 +167,7 @@ export default function SettingsScreen() {
                 <View style={styles.sourceTop}>
                   <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
                     <View style={[styles.sourceMark, endpoint?.apiUrl === source.id && styles.sourceMarkActive]}><Text style={styles.sourceMarkText}>{endpoint?.apiUrl === source.id ? "✓" : "•"}</Text></View>
-                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text>{source.sourceType === "official" ? <Text style={styles.sourceOfficialTag}>官方</Text> : null}</View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={styles.sourceStatus}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text>{source.sourceType === "official" ? <Text style={styles.sourceOfficialTag}>官方</Text> : null}</View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
                   </Pressable>
                   <Pressable accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed]}><Text style={styles.editSourceGlyph}>✎</Text></Pressable>
                 </View>
@@ -290,6 +290,8 @@ const styles = StyleSheet.create({
   sourceOfficialTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
   sourceAddress: { color: "#9AA9BE", fontSize: 10, lineHeight: 15, marginTop: 1, fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) },
   sourceStatus: { color: "#7FD0A4", fontSize: 10, lineHeight: 15, marginTop: 1 },
+  sourceStatusUnhealthy: { color: "#F2A17F" },
+  sourceStatusUnknown: { color: "#93A0B5" },
   editSourceButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#202A3D", justifyContent: "center", alignItems: "center" },
   editSourceGlyph: { color: "#D5DFED", fontSize: 18, lineHeight: 21, fontWeight: "900" },
   editForm: { gap: 8 },

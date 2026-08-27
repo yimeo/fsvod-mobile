@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createQueueTask, formatStorageLimit, nextRunnableTask, retryTask, updateQueueTask, upsertQueueTasks } from "../lib/download-queue";
+import { DEFAULT_DOWNLOAD_SETTINGS, createQueueTask, formatStorageLimit, nextRunnableTask, retryTask, updateQueueTask, upsertQueueTasks } from "../lib/download-queue";
 
 const request = (episodeName: string, remoteUrl: string) => ({ vodId: "9", vodName: "飞鸿测试剧", sourceName: "wjm3u8", episodeName, remoteUrl });
 
@@ -37,5 +37,9 @@ describe("下载队列", () => {
   it("支持不限存储上限标签", () => {
     expect(formatStorageLimit(0)).toBe("不限");
     expect(formatStorageLimit(20 * 1024 * 1024 * 1024)).toBe("20 GB");
+  });
+
+  it("新安装默认使用 50 GB 离线存储上限", () => {
+    expect(formatStorageLimit(DEFAULT_DOWNLOAD_SETTINGS.storageLimitBytes)).toBe("50 GB");
   });
 });
