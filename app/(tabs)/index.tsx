@@ -92,7 +92,7 @@ export default function HomeScreen() {
 
   const latestHistory = history[0];
   const featuredType = categories[0]?.id ?? "all";
-  const weeklyPopular = useMemo(() => sortVodItems(items, "hot").slice(0, 5), [items]);
+  const weeklyPopular = sortVodItems(items, "hot").slice(0, 5);
   const sectionTitle = `${activeTypeId === selectedRoot.id && selectedRoot.children.length > 0 ? `${selectedRoot.name} · 全部内容` : activeTypeId ? (childCategories.find((item) => item.id === activeTypeId)?.name ?? selectedRoot.name) : selectedRoot.name}${activeArea ? ` · ${activeArea}` : ""}${activeYear ? ` · ${activeYear}` : ""}`;
 
   const renderHeader = () => <View>
