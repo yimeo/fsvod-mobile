@@ -1,6 +1,6 @@
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -23,6 +23,7 @@ export default function CategoriesScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pageMode, setPageMode] = useState<CategoryPageMode>("manual");
+  const listRef = useRef<FlatList<MacCmsVod>>(null);
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
@@ -69,6 +70,12 @@ export default function CategoriesScreen() {
     setIsRefreshing(false);
   };
 
+  const goToClassicPage = (targetPage: number) => {
+    if (isLoading || targetPage < 1 || targetPage > pageCount || targetPage === page) return;
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    void loadPage(targetPage);
+  };
+
   if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator size="large" color="#FFB84D" /></ScreenContainer>;
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.empty}><Text style={styles.emptyTitle}>先连接一个数据源</Text><Text style={styles.emptyText}>添加 MACCMS 数据源后，即可按一级分类和二级分类浏览内容。</Text><Pressable onPress={() => router.navigate("/settings" as never)} style={({ pressed }) => [styles.connectButton, pressed && styles.pressed]}><Text style={styles.connectText}>去添加数据源</Text></Pressable></View></ScreenContainer>;
 
@@ -82,11 +89,23 @@ export default function CategoriesScreen() {
     {loadError ? <Text style={styles.warning}>{loadError}</Text> : null}
   </View>;
 
-  return <ScreenContainer containerClassName="bg-background"><FlatList data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
+  return <ScreenContainer containerClassName="bg-background"><FlatList ref={listRef} data={items} numColumns={2} key="category-grid" keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={styles.gridCell}><VodCard item={item} onPress={(vod) => router.push({ pathname: "/vod/[id]", params: { id: vod.id } } as never)} /></View>} ListHeaderComponent={listHeader} ListEmptyComponent={!isLoading ? <View style={styles.noResults}><Text style={styles.noResultsTitle}>暂无影片</Text><Text style={styles.noResultsText}>这个分类暂时没有可展示的内容。</Text></View> : null} ListFooterComponent={isLoading ? <View style={styles.footer}><ActivityIndicator color="#FFB84D" /></View> : pageMode === "classic" && pageCount > 1 ? <ClassicPager page={page} pageCount={pageCount} onChange={goToClassicPage} /> : page < pageCount ? pageMode === "manual" ? <Pressable onPress={() => void loadPage(page + 1, true)} style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}><Text style={styles.loadMoreText}>加载更多</Text></Pressable> : <View style={styles.autoHint}><Text style={styles.autoHintText}>滚动到底自动加载下一页</Text></View> : items.length ? <Text style={styles.endText}>已经到底了</Text> : null} contentContainerStyle={styles.content} columnWrapperStyle={items.length ? styles.gridRow : undefined} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor="#FFB84D" colors={["#FFB84D"]} />} onEndReached={() => { if (pageMode === "auto" && !isLoading && page < pageCount) void loadPage(page + 1, true); }} onEndReachedThreshold={0.65} showsVerticalScrollIndicator={false} /></ScreenContainer>;
 }
 
 function CategoryPill({ label, active, small = false, onPress }: { label: string; active: boolean; small?: boolean; onPress: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.pill, small && styles.pillSmall, active && styles.pillActive, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.pillText, small && styles.pillTextSmall, active && styles.pillTextActive]}>{label}</Text></Pressable>;
+}
+
+function ClassicPager({ page, pageCount, onChange }: { page: number; pageCount: number; onChange: (page: number) => void }) {
+  const pageNumbers = getClassicPageNumbers(page, pageCount);
+  const control = (label: string, target: number, disabled: boolean, wide = false) => <Pressable key={label} disabled={disabled} onPress={() => onChange(target)} style={({ pressed }) => [styles.pagerButton, wide && styles.pagerWideButton, disabled && styles.pagerDisabled, pressed && styles.pressed]}><Text style={styles.pagerText}>{label}</Text></Pressable>;
+  return <View style={styles.classicPager}>{control("首页", 1, page === 1, true)}{control("上一页", page - 1, page === 1, true)}{pageNumbers.map((number) => <Pressable key={number} onPress={() => onChange(number)} style={({ pressed }) => [styles.pagerButton, number === page && styles.pagerButtonActive, pressed && styles.pressed]}><Text style={[styles.pagerText, number === page && styles.pagerTextActive]}>{number}</Text></Pressable>)}{control("下一页", page + 1, page === pageCount, true)}{control("尾页", pageCount, page === pageCount, true)}</View>;
+}
+
+function getClassicPageNumbers(page: number, pageCount: number): number[] {
+  const size = Math.min(5, pageCount);
+  const start = Math.max(1, Math.min(page - 2, pageCount - size + 1));
+  return Array.from({ length: size }, (_, index) => start + index);
 }
 
 const styles = StyleSheet.create({
@@ -114,6 +133,13 @@ const styles = StyleSheet.create({
   loadMoreText: { color: "#F7BE5C", fontSize: 12, lineHeight: 17, fontWeight: "900" },
   autoHint: { paddingVertical: 18, alignItems: "center" },
   autoHintText: { color: "#77869C", fontSize: 11, lineHeight: 16 },
+  classicPager: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 5, paddingTop: 2, paddingBottom: 18 },
+  pagerButton: { width: 28, height: 32, borderRadius: 8, justifyContent: "center", alignItems: "center", backgroundColor: "#182235", borderWidth: 1, borderColor: "#334157" },
+  pagerWideButton: { width: 39 },
+  pagerButtonActive: { backgroundColor: "#FFB84D", borderColor: "#FFB84D" },
+  pagerDisabled: { opacity: 0.35 },
+  pagerText: { color: "#C9D5E5", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  pagerTextActive: { color: "#141821" },
   endText: { color: "#68778E", textAlign: "center", paddingBottom: 14, fontSize: 12 },
   warning: { color: "#F6C174", backgroundColor: "#2A2630", fontSize: 12, lineHeight: 18, padding: 10, borderRadius: 10, marginBottom: 12 },
   noResults: { alignItems: "center", paddingVertical: 52 },
