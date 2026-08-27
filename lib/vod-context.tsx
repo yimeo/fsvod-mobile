@@ -41,7 +41,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<MacCmsCategory[]>([]);
   const [isBooting, setIsBooting] = useState(true);
   const [sourceError, setSourceError] = useState<string | null>(null);
-  const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
+  const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, configEndpoints: ["https://api1.066821.xyz/api.json", "https://api2.066821.xyz/api.json"], lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
 
   const syncOfficialResources = useCallback(async (force = false): Promise<OfficialResourceSyncResult> => {
     const result = await syncOfficialResourceCatalog(force);

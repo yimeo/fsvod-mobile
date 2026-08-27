@@ -8,6 +8,7 @@ export const OFFICIAL_RESOURCE_CONFIG_URLS = [
 export const OFFICIAL_RESOURCE_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 
 const OFFICIAL_RESOURCE_SYNC_STATE_KEY = "fsvod:official-resource-sync";
+const DEFAULT_OFFICIAL_CONFIG_ENDPOINTS = OFFICIAL_RESOURCE_CONFIG_URLS;
 const NAME_KEYS = ["name", "title", "displayName", "siteName", "sourceName", "label"];
 const ADDRESS_KEYS = ["url", "api", "apiUrl", "address", "endpoint", "sourceUrl", "vodApi"];
 
@@ -19,6 +20,7 @@ export interface OfficialVodSource {
 
 export interface OfficialResourceSyncState {
   configUrl: string | null;
+  configEndpoints: string[];
   lastCheckedAt: string | null;
   lastUpdatedAt: string | null;
   lastError: string | null;
@@ -28,6 +30,7 @@ export interface OfficialResourceSyncState {
 
 export interface OfficialResourceCatalog {
   configUrl: string;
+  configEndpoints: string[];
   resources: OfficialVodSource[];
 }
 
@@ -44,6 +47,7 @@ export type OfficialConfigRequester = (url: string) => Promise<unknown>;
 
 const DEFAULT_SYNC_STATE: OfficialResourceSyncState = {
   configUrl: null,
+  configEndpoints: [...DEFAULT_OFFICIAL_CONFIG_ENDPOINTS],
   lastCheckedAt: null,
   lastUpdatedAt: null,
   lastError: null,
@@ -127,11 +131,15 @@ function collectOfficialData(value: unknown, nameHint: string, configUrls: Set<s
   });
 }
 
-export function parseOfficialResourceConfig(payload: unknown): { configUrls: string[]; resources: OfficialVodSource[] } {
+export function parseOfficialResourceConfig(payload: unknown): { primaryApi: string | null; backupApi: string | null; configUrls: string[]; resources: OfficialVodSource[] } {
   const configUrls = new Set<string>();
+  const primaryApi = isObject(payload) ? normalizeUrl(text(payload.primaryApi)) : null;
+  const backupApi = isObject(payload) ? normalizeUrl(text(payload.backupApi)) : null;
+  if (primaryApi && isConfigUrl(primaryApi)) configUrls.add(primaryApi);
+  if (backupApi && isConfigUrl(backupApi)) configUrls.add(backupApi);
   const resources: OfficialVodSource[] = [];
   collectOfficialData(payload, "", configUrls, resources);
-  return { configUrls: [...configUrls], resources };
+  return { primaryApi, backupApi, configUrls: [...configUrls], resources };
 }
 
 async function requestOfficialConfig(url: string): Promise<unknown> {
@@ -147,8 +155,8 @@ async function requestOfficialConfig(url: string): Promise<unknown> {
   }
 }
 
-export async function loadOfficialResourceCatalog(preferredConfigUrl?: string | null, request: OfficialConfigRequester = requestOfficialConfig): Promise<OfficialResourceCatalog> {
-  const candidates = [preferredConfigUrl, ...OFFICIAL_RESOURCE_CONFIG_URLS]
+export async function loadOfficialResourceCatalog(configEndpoints?: string[], request: OfficialConfigRequester = requestOfficialConfig): Promise<OfficialResourceCatalog> {
+  const candidates = (configEndpoints?.length ? configEndpoints : DEFAULT_OFFICIAL_CONFIG_ENDPOINTS)
     .map((value) => value ? normalizeUrl(value) : null)
     .filter((value): value is string => Boolean(value));
   const uniqueCandidates = [...new Set(candidates)];
@@ -157,16 +165,19 @@ export async function loadOfficialResourceCatalog(preferredConfigUrl?: string | 
   for (const configUrl of uniqueCandidates) {
     try {
       const parsed = parseOfficialResourceConfig(await request(configUrl));
-      const dynamicConfigUrl = parsed.configUrls.find((url) => !OFFICIAL_RESOURCE_CONFIG_URLS.includes(url as typeof OFFICIAL_RESOURCE_CONFIG_URLS[number]));
-      if (dynamicConfigUrl && dynamicConfigUrl !== configUrl) {
+      const replacementEndpoints = parsed.primaryApi && parsed.backupApi && isConfigUrl(parsed.primaryApi) && isConfigUrl(parsed.backupApi)
+        ? [parsed.primaryApi, parsed.backupApi]
+        : null;
+      const hasReplacement = replacementEndpoints !== null && replacementEndpoints.some((url, index) => url !== uniqueCandidates[index]);
+      if (replacementEndpoints && hasReplacement) {
         try {
-          const updated = parseOfficialResourceConfig(await request(dynamicConfigUrl));
-          return { configUrl: dynamicConfigUrl, resources: updated.resources.length ? updated.resources : parsed.resources };
+          const updated = parseOfficialResourceConfig(await request(replacementEndpoints[0]));
+          return { configUrl: replacementEndpoints[0], configEndpoints: replacementEndpoints, resources: updated.resources.length ? updated.resources : parsed.resources };
         } catch {
-          return { configUrl: dynamicConfigUrl, resources: parsed.resources };
+          return { configUrl, configEndpoints: uniqueCandidates, resources: parsed.resources };
         }
       }
-      return { configUrl, resources: parsed.resources };
+      return { configUrl, configEndpoints: uniqueCandidates, resources: parsed.resources };
     } catch (error) {
       latestError = error;
     }
@@ -202,10 +213,11 @@ export async function syncOfficialResourceCatalog(force = false): Promise<Offici
   }
 
   try {
-    const catalog = await loadOfficialResourceCatalog(previous.configUrl);
+    const catalog = await loadOfficialResourceCatalog(previous.configEndpoints);
     const resourceSignature = signatureFor(catalog.resources);
     const state: OfficialResourceSyncState = {
       configUrl: catalog.configUrl,
+      configEndpoints: catalog.configEndpoints,
       lastCheckedAt: new Date(checkedAt).toISOString(),
       lastUpdatedAt: resourceSignature === previous.resourceSignature ? previous.lastUpdatedAt : new Date(checkedAt).toISOString(),
       lastError: null,
