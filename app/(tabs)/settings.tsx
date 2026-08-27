@@ -5,7 +5,7 @@ import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { DEFAULT_LIST_PAGE_SIZE, clearLocalVodData, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, clearLocalVodData, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 import { clearQueueTasks } from "@/lib/download-queue";
@@ -155,6 +155,31 @@ export default function SettingsScreen() {
     }
   };
 
+  const runSelectiveCacheClear = async (target: "posters" | "history" | "video") => {
+    if (isClearingCache) return;
+    if (target === "video" && Platform.OS !== "android") {
+      setCacheMessage("当前设备没有可单独清理的视频缓存。");
+      return;
+    }
+    const labels = { posters: "海报缓存", history: "观看记录", video: "视频缓存" } as const;
+    setIsClearingCache(true);
+    setCacheMessage(`正在清理${labels[target]}…`);
+    const task = target === "posters"
+      ? Promise.all([Promise.resolve().then(() => Image.clearMemoryCache()), Promise.resolve().then(() => Image.clearDiskCache())])
+      : target === "history"
+        ? clearWatchHistory()
+        : Promise.resolve().then(() => clearVideoCacheAsync());
+    try {
+      await task;
+      await loadCacheSummary();
+      setCacheMessage(`${labels[target]}已清理。`);
+    } catch {
+      setCacheMessage(`${labels[target]}暂时无法清理，请退出播放页后重试。`);
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
+
   return (
     <ScreenContainer containerClassName="bg-background">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -202,6 +227,7 @@ export default function SettingsScreen() {
             <CacheItem label="离线剧集" value={`${cache.offlineCount} · ${formatBytes(cache.offlineBytes)}`} />
           </View>
           <View style={styles.cacheClearPreview}><Text style={styles.cacheClearPreviewTitle}>清理前预估</Text><Text style={styles.cacheClearPreviewText}>可释放 {formatBytes(clearableMediaBytes)} 的视频与离线缓存，并清除 {clearableRecordCount} 项播放、搜索和观看数据；海报缓存将一并清理。</Text></View>
+          <View style={styles.selectiveClearActions}><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("posters")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理海报</Text><Text style={styles.selectiveClearMeta}>保留影片与记录</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("history")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理观看记录</Text><Text style={styles.selectiveClearMeta}>{cache.history} 条记录</Text></Pressable><Pressable disabled={isClearingCache} onPress={() => void runSelectiveCacheClear("video")} style={({ pressed }) => [styles.selectiveClearButton, isClearingCache && styles.disabled, pressed && styles.pressed]}><Text style={styles.selectiveClearTitle}>仅清理视频缓存</Text><Text style={styles.selectiveClearMeta}>{cache.videoBytes === null ? "当前设备不可用" : formatBytes(cache.videoBytes)}</Text></Pressable></View>
           <Pressable disabled={isClearingCache} onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, isClearingCache && styles.disabled, pressed && styles.pressed]}>{isClearingCache ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#B7D6F7" size="small" /><Text style={styles.secondaryText}>正在清理…</Text></View> : <Text style={styles.secondaryText}>清理本地缓存</Text>}</Pressable>
           {cacheMessage ? <Text style={styles.cacheMessage}>{cacheMessage}</Text> : null}
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
@@ -335,6 +361,10 @@ const styles = StyleSheet.create({
   cacheClearPreview: { marginTop: 13, padding: 10, borderRadius: 10, backgroundColor: "#102438", borderWidth: 1, borderColor: "#284967" },
   cacheClearPreviewTitle: { color: "#B7D6F7", fontSize: 11, lineHeight: 16, fontWeight: "900" },
   cacheClearPreviewText: { color: "#AAB9CA", fontSize: 10, lineHeight: 16, marginTop: 2 },
+  selectiveClearActions: { gap: 8, marginTop: 12 },
+  selectiveClearButton: { minHeight: 45, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 10, backgroundColor: "#111C2E", borderWidth: 1, borderColor: "#31445F", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  selectiveClearTitle: { color: "#DCE7F5", fontSize: 11, lineHeight: 16, fontWeight: "900" },
+  selectiveClearMeta: { color: "#8495AC", fontSize: 10, lineHeight: 15, textAlign: "right" },
   secondaryButton: { borderWidth: 1, borderColor: "#48648D", height: 42, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 14 },
   clearingButtonContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   secondaryText: { color: "#B7D6F7", fontWeight: "700", fontSize: 13 },
