@@ -1,7 +1,7 @@
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
@@ -13,6 +13,7 @@ const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, child
 
 export default function CategoriesScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ rootId?: string }>();
   const { endpoint, categories, isBooting } = useVodSource();
   const [rootId, setRootId] = useState("");
   const [childId, setChildId] = useState("");
@@ -25,17 +26,26 @@ export default function CategoriesScreen() {
   const [pageMode, setPageMode] = useState<CategoryPageMode>("auto");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
+  const appliedRouteRootId = useRef<string | null>(null);
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
   const childChoices = useMemo(() => root.children.length ? [{ id: root.id, name: "全部", parentId: null, children: [] }, ...root.children] : [], [root]);
 
   useEffect(() => {
+    const requestedRootId = Array.isArray(routeParams.rootId) ? routeParams.rootId[0] : routeParams.rootId;
+    if (requestedRootId && requestedRootId !== appliedRouteRootId.current && categories.some((category) => category.id === requestedRootId)) {
+      appliedRouteRootId.current = requestedRootId;
+      setRootId(requestedRootId);
+      setChildId(requestedRootId);
+      return;
+    }
+    if (!requestedRootId) appliedRouteRootId.current = null;
     if (categories.length && !categories.some((category) => category.id === rootId)) {
       setRootId(categories[0].id);
       setChildId(categories[0].id);
     }
-  }, [categories, rootId]);
+  }, [categories, rootId, routeParams.rootId]);
 
   useFocusEffect(useCallback(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
