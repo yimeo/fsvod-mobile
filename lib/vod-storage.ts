@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import type { MacCmsEndpoint, MacCmsVodDetail } from "@/lib/maccms";
+import type { MacCmsEndpoint, MacCmsEpisode, MacCmsVodDetail } from "@/lib/maccms";
 
 const PREFIX = "fsvod:";
 const SOURCE_KEY = `${PREFIX}source`;
@@ -17,6 +17,11 @@ export interface WatchHistoryEntry {
   sourceName: string;
   episodeName: string;
   watchedAt: string;
+  episodeUrl?: string;
+  episodeIndex?: number;
+  playlist?: MacCmsEpisode[];
+  positionSeconds?: number;
+  durationSeconds?: number;
 }
 
 export type SourceHealth = "unknown" | "healthy" | "unhealthy";
@@ -143,13 +148,21 @@ export async function saveCategoryOrder(order: string[]): Promise<void> {
 
 export async function saveWatchHistory(entry: WatchHistoryEntry): Promise<WatchHistoryEntry[]> {
   const history = await getWatchHistory();
-  const next = [entry, ...history.filter((item) => item.id !== entry.id)].slice(0, 30);
+  const episodeKey = entry.episodeUrl || entry.episodeName;
+  const normalizedEntry = entry.durationSeconds && entry.positionSeconds && entry.positionSeconds >= Math.max(entry.durationSeconds - 10, entry.durationSeconds * 0.95)
+    ? { ...entry, positionSeconds: 0 }
+    : entry;
+  const next = [normalizedEntry, ...history.filter((item) => item.id !== entry.id || (item.episodeUrl || item.episodeName) !== episodeKey)].slice(0, 30);
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   return next;
 }
 
 export function getWatchHistory(): Promise<WatchHistoryEntry[]> {
   return getJson<WatchHistoryEntry[]>(HISTORY_KEY, []);
+}
+
+export function clearWatchHistory(): Promise<void> {
+  return AsyncStorage.removeItem(HISTORY_KEY);
 }
 
 export async function clearLocalVodData(): Promise<void> {

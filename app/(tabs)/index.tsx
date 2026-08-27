@@ -6,6 +6,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { VodPoster } from "@/components/vod-poster";
 import { fetchVodPage, mergeMacCmsPages, sortVodItems, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
+import { getOfflineDownload } from "@/lib/offline-downloads";
 import { getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
@@ -82,6 +83,13 @@ export default function HomeScreen() {
 
   const latestHistory = history[0];
   const displayItems = items.slice(0, 18);
+  const continueProgress = latestHistory?.durationSeconds && latestHistory.positionSeconds ? Math.min(100, Math.max(0, Math.round((latestHistory.positionSeconds / latestHistory.durationSeconds) * 100))) : 0;
+
+  const resumeHistory = async (entry: WatchHistoryEntry) => {
+    if (!entry.episodeUrl) { router.push({ pathname: "/vod/[id]", params: { id: entry.id } } as never); return; }
+    const offline = await getOfflineDownload(entry.episodeUrl);
+    router.push({ pathname: "/player", params: { url: offline?.localUri ?? entry.episodeUrl, episodeUrl: entry.episodeUrl, vodId: entry.id, ...(entry.posterUrl ? { posterUrl: entry.posterUrl } : {}), title: entry.name, episode: entry.episodeName, source: entry.sourceName, offline: offline ? "1" : "0", episodeIndex: String(entry.episodeIndex ?? 0), playlist: JSON.stringify(entry.playlist ?? []), resumePosition: String(entry.positionSeconds ?? 0) } } as never);
+  };
 
   if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#FFB84D" size="large" /></ScreenContainer>;
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><VodPoster title="飞鸿影院" url={null} style={styles.emptyIcon} /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
@@ -91,7 +99,7 @@ export default function HomeScreen() {
     <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>网络不可用，正在展示本地已缓存内容。</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
-    {latestHistory ? <View style={styles.continueSection}><Text style={styles.sectionTitle}>继续观看</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text><Pressable onPress={() => router.push({ pathname: "/vod/[id]", params: { id: latestHistory.id } } as never)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text numberOfLines={1} style={styles.continueMeta}>{latestHistory.episodeName || "影视内容"}</Text><View style={styles.continueLine}><View style={styles.continueProgress} /></View></View></Pressable></View> : null}
+    {latestHistory ? <View style={styles.continueSection}><View style={styles.continueHeading}><View><Text style={styles.sectionTitle}>继续观看</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text></View><Pressable onPress={() => router.push("/history" as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View><Pressable onPress={() => void resumeHistory(latestHistory)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text numberOfLines={1} style={styles.continueMeta}>{latestHistory.episodeName || "影视内容"}{latestHistory.positionSeconds ? ` · ${formatDuration(latestHistory.positionSeconds)}` : ""}</Text><View style={styles.continueLine}><View style={[styles.continueProgress, { width: `${continueProgress}%` }]} /></View></View></Pressable></View> : null}
     <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
     {loadError ? <Text style={styles.loadError}>{loadError}</Text> : null}
   </View>;
@@ -101,6 +109,11 @@ export default function HomeScreen() {
 
 function CategoryChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text></Pressable>;
+}
+
+function formatDuration(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 const styles = StyleSheet.create({
@@ -126,6 +139,7 @@ const styles = StyleSheet.create({
   chipText: { color: "#D9DFEA", fontWeight: "900", fontSize: 13, lineHeight: 18 },
   chipTextActive: { color: "#171821" },
   continueSection: { marginBottom: 28 },
+  continueHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
   sectionTitle: { color: "#F5F6FA", fontSize: 22, lineHeight: 30, fontWeight: "900" },
   sectionSubtitle: { color: "#96A2B7", fontSize: 12, lineHeight: 18, marginTop: 2 },
   continueCard: { flexDirection: "row", gap: 13, marginTop: 15, alignItems: "center", alignSelf: "flex-start" },
@@ -134,7 +148,7 @@ const styles = StyleSheet.create({
   continueTitle: { color: "#F0F2F7", fontSize: 16, lineHeight: 23, fontWeight: "900" },
   continueMeta: { color: "#9CA9BC", fontSize: 12, lineHeight: 18, marginTop: 5 },
   continueLine: { height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "#263249", marginTop: 13 },
-  continueProgress: { width: "42%", height: "100%", backgroundColor: "#FFB84D" },
+  continueProgress: { height: "100%", backgroundColor: "#FFB84D" },
   contentHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingBottom: 15 },
   moreButton: { height: 28, justifyContent: "center", paddingLeft: 3 },
   moreText: { color: "#FFBE59", fontSize: 12, lineHeight: 17, fontWeight: "900" },

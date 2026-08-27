@@ -48,9 +48,9 @@ export default function VodDetailScreen() {
 
   const play = async (episodeName: string, url: string) => {
     if (!detail || !source) return;
-    await saveWatchHistory({ id: detail.id, name: detail.name, posterUrl: detail.posterUrl, sourceName: source.name, episodeName, watchedAt: new Date().toISOString() });
+    await saveWatchHistory({ id: detail.id, name: detail.name, posterUrl: detail.posterUrl, sourceName: source.name, episodeName, episodeUrl: url, episodeIndex: source.episodes.findIndex((item) => item.url === url), playlist: source.episodes, positionSeconds: 0, watchedAt: new Date().toISOString() });
     const offline = downloads[url];
-    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, title: detail.name, episode: episodeName, source: source.name, offline: offline ? "1" : "0", episodeIndex: String(source.episodes.findIndex((item) => item.url === url)), playlist: JSON.stringify(source.episodes) } } as never);
+    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, episodeUrl: url, vodId: detail.id, ...(detail.posterUrl ? { posterUrl: detail.posterUrl } : {}), title: detail.name, episode: episodeName, source: source.name, offline: offline ? "1" : "0", episodeIndex: String(source.episodes.findIndex((item) => item.url === url)), playlist: JSON.stringify(source.episodes) } } as never);
   };
 
   const download = async (episodeName: string, url: string) => {

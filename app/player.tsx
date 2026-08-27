@@ -1,11 +1,12 @@
 import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { VideoView, useVideoPlayer } from "expo-video";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { isDirectVideoUrl } from "@/lib/maccms";
+import { saveWatchHistory } from "@/lib/vod-storage";
 
 interface PlaylistEpisode { name: string; url: string; }
 
@@ -21,12 +22,15 @@ function parsePlaylist(value: string): PlaylistEpisode[] {
 }
 
 export default function PlayerScreen() {
-  const params = useLocalSearchParams<{ url: string; title?: string; episode?: string; source?: string; offline?: string; playlist?: string; episodeIndex?: string }>();
+  const params = useLocalSearchParams<{ url: string; episodeUrl?: string; title?: string; episode?: string; source?: string; offline?: string; playlist?: string; episodeIndex?: string; vodId?: string; posterUrl?: string; resumePosition?: string }>();
   const router = useRouter();
   const url = getParam(params.url);
   const title = getParam(params.title, "影片播放");
   const episode = getParam(params.episode);
   const source = getParam(params.source);
+  const vodId = getParam(params.vodId);
+  const posterUrl = getParam(params.posterUrl) || null;
+  const episodeUrl = getParam(params.episodeUrl, url);
   const offline = getParam(params.offline) === "1";
   const playlist = useMemo(() => parsePlaylist(getParam(params.playlist)), [params.playlist]);
   const preferredIndex = Number.parseInt(getParam(params.episodeIndex), 10);
@@ -36,13 +40,38 @@ export default function PlayerScreen() {
   }, [playlist, preferredIndex, url]);
   const directPlayable = Boolean(url && isDirectVideoUrl(url));
   const player = useVideoPlayer(null);
+  const lastSavedPosition = useRef(0);
+  const resumePositionValue = Number(getParam(params.resumePosition, "0"));
+  const resumePosition = Number.isFinite(resumePositionValue) && resumePositionValue > 3 ? resumePositionValue : 0;
+
+  const persistProgress = useCallback((positionSeconds: number) => {
+    if (!vodId || !episodeUrl || !Number.isFinite(positionSeconds)) return;
+    const safePosition = Math.max(0, Math.floor(positionSeconds));
+    if (safePosition > 0 && Math.abs(safePosition - lastSavedPosition.current) < 4) return;
+    lastSavedPosition.current = safePosition;
+    void saveWatchHistory({ id: vodId, name: title, posterUrl, sourceName: source, episodeName: episode || "影视内容", episodeUrl, episodeIndex: currentIndex >= 0 ? currentIndex : 0, playlist, positionSeconds: safePosition, durationSeconds: Number.isFinite(player.duration) ? player.duration : undefined, watchedAt: new Date().toISOString() });
+  }, [currentIndex, episode, episodeUrl, player.duration, playlist, posterUrl, source, title, vodId]);
 
   useEffect(() => {
     if (!directPlayable) { player.pause(); return; }
     let active = true;
-    void player.replaceAsync({ uri: url, useCaching: Platform.OS === "android" }).then(() => { if (active) player.play(); });
+    void player.replaceAsync({ uri: url, useCaching: Platform.OS === "android" }).then(() => {
+      if (!active) return;
+      if (resumePosition > 0) player.currentTime = resumePosition;
+      player.play();
+    });
     return () => { active = false; player.pause(); };
-  }, [directPlayable, player, url]);
+  }, [directPlayable, player, resumePosition, url]);
+
+  useEffect(() => {
+    if (!directPlayable) return;
+    player.timeUpdateEventInterval = 5;
+    const subscription = player.addListener("timeUpdate", ({ currentTime }) => persistProgress(currentTime));
+    return () => {
+      subscription.remove();
+      persistProgress(player.currentTime);
+    };
+  }, [directPlayable, persistProgress, player]);
 
   const openExternal = async () => {
     if (!url) return;
@@ -53,7 +82,7 @@ export default function PlayerScreen() {
   const playEpisodeAt = (index: number) => {
     const next = playlist[index];
     if (!next) return;
-    router.replace({ pathname: "/player", params: { url: next.url, title, episode: next.name, source, offline: "0", episodeIndex: String(index), playlist: JSON.stringify(playlist) } } as never);
+    router.replace({ pathname: "/player", params: { url: next.url, episodeUrl: next.url, title, episode: next.name, source, offline: "0", episodeIndex: String(index), playlist: JSON.stringify(playlist), vodId, ...(posterUrl ? { posterUrl } : {}) } } as never);
   };
 
   useEffect(() => {
@@ -64,7 +93,13 @@ export default function PlayerScreen() {
 
   if (!url) return <View style={styles.page}><ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>播放地址无效</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回详情</Text></Pressable></ScreenContainer><GlobalBottomNavigation /></View>;
 
-  return <View style={styles.page}><ScreenContainer containerClassName="bg-background" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹ 返回</Text></Pressable><View style={styles.headerInfo}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.episode}>{episode || "正在播放"}{source ? ` · ${source}` : ""}</Text></View></View>{directPlayable ? <View style={styles.playerWrap}><VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" /><View style={styles.statusRow}>{offline ? <Text style={styles.offlineBadge}>离线播放</Text> : <ActivityIndicator size="small" color="#F5B64B" />}<Text style={styles.statusText}>{offline ? "正在使用设备中的本地下载媒体。" : "正在播放网络媒体。"}{currentIndex >= 0 && currentIndex < playlist.length - 1 ? " 播放结束后将自动进入下一集。" : ""}</Text></View></View> : <View style={styles.unsupported}><Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text><Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以切换剧集、返回详情切换线路，或在浏览器中打开。</Text><Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}><Text style={styles.externalText}>在浏览器打开</Text></Pressable></View>}{playlist.length ? <View style={styles.playlistPanel}><View style={styles.episodeHeading}><View><Text style={styles.playlistTitle}>播放列表</Text><Text style={styles.playlistMeta}>{playlist.length} 集 · 当前第 {currentIndex >= 0 ? currentIndex + 1 : 1} 集</Text></View><View style={styles.switchActions}><Pressable disabled={currentIndex <= 0} onPress={() => playEpisodeAt(currentIndex - 1)} style={({ pressed }) => [styles.switchButton, currentIndex <= 0 && styles.switchDisabled, pressed && styles.pressed]}><Text style={styles.switchText}>上一集</Text></Pressable><Pressable disabled={currentIndex < 0 || currentIndex >= playlist.length - 1} onPress={() => playEpisodeAt(currentIndex + 1)} style={({ pressed }) => [styles.switchButton, currentIndex < 0 || currentIndex >= playlist.length - 1 ? styles.switchDisabled : styles.switchPrimary, pressed && styles.pressed]}><Text style={[styles.switchText, currentIndex >= 0 && currentIndex < playlist.length - 1 && styles.switchPrimaryText]}>下一集</Text></Pressable></View></View><FlatList data={playlist} key="playlist-grid" numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.url}-${index}`} contentContainerStyle={styles.playlistList} columnWrapperStyle={playlist.length ? styles.playlistRow : undefined} renderItem={({ item, index }) => <Pressable onPress={() => playEpisodeAt(index)} style={({ pressed }) => [styles.playlistItem, index === currentIndex && styles.playlistItemActive, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.playlistItemText, index === currentIndex && styles.playlistItemTextActive]}>{item.name}</Text></Pressable>} /></View> : null}</ScrollView></ScreenContainer><GlobalBottomNavigation /></View>;
+  return <View style={styles.page}><ScreenContainer containerClassName="bg-background" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹ 返回</Text></Pressable><View style={styles.headerInfo}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.episode}>{episode || "正在播放"}{source ? ` · ${source}` : ""}</Text></View></View>{directPlayable ? <View style={styles.playerWrap}><VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" /><View style={styles.statusRow}>{offline ? <Text style={styles.offlineBadge}>离线播放</Text> : <ActivityIndicator size="small" color="#F5B64B" />}<Text style={styles.statusText}>{offline ? "正在使用设备中的本地下载媒体。" : "正在播放网络媒体。"}{resumePosition > 0 ? ` 已从 ${formatDuration(resumePosition)} 继续播放。` : ""}{currentIndex >= 0 && currentIndex < playlist.length - 1 ? " 播放结束后将自动进入下一集。" : ""}</Text></View></View> : <View style={styles.unsupported}><Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text><Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以切换剧集、返回详情切换线路，或在浏览器中打开。</Text><Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}><Text style={styles.externalText}>在浏览器打开</Text></Pressable></View>}{playlist.length ? <View style={styles.playlistPanel}><View style={styles.episodeHeading}><View><Text style={styles.playlistTitle}>播放列表</Text><Text style={styles.playlistMeta}>{playlist.length} 集 · 当前第 {currentIndex >= 0 ? currentIndex + 1 : 1} 集</Text></View><View style={styles.switchActions}><Pressable disabled={currentIndex <= 0} onPress={() => playEpisodeAt(currentIndex - 1)} style={({ pressed }) => [styles.switchButton, currentIndex <= 0 && styles.switchDisabled, pressed && styles.pressed]}><Text style={styles.switchText}>上一集</Text></Pressable><Pressable disabled={currentIndex < 0 || currentIndex >= playlist.length - 1} onPress={() => playEpisodeAt(currentIndex + 1)} style={({ pressed }) => [styles.switchButton, currentIndex < 0 || currentIndex >= playlist.length - 1 ? styles.switchDisabled : styles.switchPrimary, pressed && styles.pressed]}><Text style={[styles.switchText, currentIndex >= 0 && currentIndex < playlist.length - 1 && styles.switchPrimaryText]}>下一集</Text></Pressable></View></View><FlatList data={playlist} key="playlist-grid" numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.url}-${index}`} contentContainerStyle={styles.playlistList} columnWrapperStyle={playlist.length ? styles.playlistRow : undefined} renderItem={({ item, index }) => <Pressable onPress={() => playEpisodeAt(index)} style={({ pressed }) => [styles.playlistItem, index === currentIndex && styles.playlistItemActive, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.playlistItemText, index === currentIndex && styles.playlistItemTextActive]}>{item.name}</Text></Pressable>} /></View> : null}</ScrollView></ScreenContainer><GlobalBottomNavigation /></View>;
+}
+
+function formatDuration(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(whole / 60);
+  return `${minutes}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 const styles = StyleSheet.create({
