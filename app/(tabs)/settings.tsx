@@ -26,6 +26,8 @@ export default function SettingsScreen() {
   const [sourceDisplayName, setSourceDisplayName] = useState("");
   const [sourceAddress, setSourceAddress] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
+  const [isClearingCache, setIsClearingCache] = useState(false);
   const [cache, setCache] = useState<CacheSummary>({ playbackLists: 0, searches: 0, history: 0, videoBytes: null, offlineCount: 0, offlineBytes: 0 });
   const [categoryPageMode, setCategoryPageMode] = useState<CategoryPageMode>("auto");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
@@ -35,7 +37,14 @@ export default function SettingsScreen() {
   const loadCacheSummary = useCallback(async () => {
     const local = await getLocalCacheSummary();
     const offline = await getOfflineSummary();
-    const videoBytes = Platform.OS === "android" ? getCurrentVideoCacheSize() : null;
+    let videoBytes: number | null = null;
+    if (Platform.OS === "android") {
+      try {
+        videoBytes = getCurrentVideoCacheSize();
+      } catch {
+        videoBytes = null;
+      }
+    }
     setCache({ ...local, videoBytes, offlineCount: offline.count, offlineBytes: offline.sizeBytes });
   }, []);
 
@@ -121,29 +130,26 @@ export default function SettingsScreen() {
     }
   };
 
-  const clearCaches = () => {
-    Alert.alert("清理本地缓存", "将清除已缓存的播放列表、搜索与观看记录，以及海报缓存。", [
-      { text: "取消", style: "cancel" },
-      {
-        text: "清理",
-        style: "destructive",
-        onPress: () => { void runClearCaches(); },
-      },
-    ]);
-  };
+  const clearCaches = () => { if (!isClearingCache) void runClearCaches(); };
 
   const runClearCaches = async () => {
+    setIsClearingCache(true);
+    setCacheMessage("正在清理本地缓存…");
+    const results = await Promise.allSettled([
+      clearLocalVodData(),
+      clearOfflineDownloads(),
+      clearQueueTasks(),
+      Promise.resolve().then(() => Image.clearMemoryCache()),
+      Promise.resolve().then(() => Image.clearDiskCache()),
+      Platform.OS === "android" ? Promise.resolve().then(() => clearVideoCacheAsync()) : Promise.resolve(),
+    ]);
     try {
-      await clearLocalVodData();
-      await clearOfflineDownloads();
-      await clearQueueTasks();
-      await Image.clearMemoryCache();
-      await Image.clearDiskCache();
-      if (Platform.OS === "android") await clearVideoCacheAsync();
       await loadCacheSummary();
-      setMessage("本地缓存已清理；数据源配置会继续保留。");
+      setCacheMessage(results.some((result) => result.status === "rejected") ? "部分缓存未能清理，可退出播放页后再次尝试。" : "本地缓存已清理；数据源和个人设置已保留。");
     } catch {
-      setMessage("部分缓存正在被播放器占用，请退出播放页后重试。");
+      setCacheMessage("缓存已开始清理，但统计刷新失败；请退出播放页后重试。");
+    } finally {
+      setIsClearingCache(false);
     }
   };
 
@@ -193,7 +199,8 @@ export default function SettingsScreen() {
             <CacheItem label="视频缓存" value={cache.videoBytes === null ? "—" : formatBytes(cache.videoBytes)} />
             <CacheItem label="离线剧集" value={`${cache.offlineCount} · ${formatBytes(cache.offlineBytes)}`} />
           </View>
-          <Pressable onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>清理本地缓存</Text></Pressable>
+          <Pressable disabled={isClearingCache} onPress={clearCaches} style={({ pressed }) => [styles.secondaryButton, isClearingCache && styles.disabled, pressed && styles.pressed]}>{isClearingCache ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#B7D6F7" size="small" /><Text style={styles.secondaryText}>正在清理…</Text></View> : <Text style={styles.secondaryText}>清理本地缓存</Text>}</Pressable>
+          {cacheMessage ? <Text style={styles.cacheMessage}>{cacheMessage}</Text> : null}
           <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
         </View>
         <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类与搜索翻页模式</Text><Text style={styles.paginationText}>默认自动加载；自动、手动和经典模式默认每页 24 条。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载</Text></Pressable><Pressable onPress={() => setPageMode("classic")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "classic" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "classic" && styles.paginationOptionTextActive]}>经典模式</Text></Pressable></View>{categoryPageMode === "classic" ? <View style={styles.classicPageSize}><View><Text style={styles.classicPageSizeTitle}>经典模式每页条数</Text><Text style={styles.classicPageSizeText}>当前每页显示 {classicPageSize} 条内容</Text></View><View style={styles.classicPageSizeOptions}>{([12, 24, 30, 60] as CategoryClassicPageSize[]).map((size) => <Pressable key={size} onPress={() => setClassicPageSizePreference(size)} style={({ pressed }) => [styles.classicPageSizeOption, classicPageSize === size && styles.classicPageSizeOptionActive, pressed && styles.pressed]}><Text style={[styles.classicPageSizeOptionText, classicPageSize === size && styles.classicPageSizeOptionTextActive]}>{size}</Text></Pressable>)}</View></View> : null}</View>
@@ -323,7 +330,9 @@ const styles = StyleSheet.create({
   cacheValue: { color: "#F6F7FB", fontSize: 16, lineHeight: 22, fontWeight: "800" },
   cacheLabel: { color: "#8290A8", fontSize: 11, lineHeight: 16, marginTop: 2 },
   secondaryButton: { borderWidth: 1, borderColor: "#48648D", height: 42, borderRadius: 11, justifyContent: "center", alignItems: "center", marginTop: 14 },
+  clearingButtonContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   secondaryText: { color: "#B7D6F7", fontWeight: "700", fontSize: 13 },
+  cacheMessage: { color: "#A9E2BE", fontSize: 11, lineHeight: 17, marginTop: 8, fontWeight: "700" },
   cacheHint: { color: "#8592AB", fontSize: 11, lineHeight: 17, marginTop: 10 },
   modalBackdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(2, 5, 12, 0.74)" },
   modalCard: { borderRadius: 20, padding: 18, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#35435D" },

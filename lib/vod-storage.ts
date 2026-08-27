@@ -226,8 +226,8 @@ export function clearWatchHistory(): Promise<void> {
 
 export async function clearLocalVodData(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
-  const appKeys = keys.filter((key) => key.startsWith(PREFIX) && key !== SOURCE_KEY && key !== SOURCES_KEY);
-  if (appKeys.length) await AsyncStorage.multiRemove(appKeys);
+  const cacheKeys = keys.filter((key) => key.startsWith(DETAIL_PREFIX) || key === SEARCH_KEY || key === HISTORY_KEY);
+  if (cacheKeys.length) await AsyncStorage.multiRemove(cacheKeys);
 }
 
 export async function getLocalCacheSummary(): Promise<{ playbackLists: number; searches: number; history: number }> {
