@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createQueueTask, nextRunnableTask, retryTask, upsertQueueTasks } from "../lib/download-queue";
+import { createQueueTask, formatStorageLimit, nextRunnableTask, retryTask, updateQueueTask, upsertQueueTasks } from "../lib/download-queue";
 
 const request = (episodeName: string, remoteUrl: string) => ({ vodId: "9", vodName: "飞鸿测试剧", sourceName: "wjm3u8", episodeName, remoteUrl });
 
@@ -25,5 +25,17 @@ describe("下载队列", () => {
     const second = createQueueTask(request("第02集", "https://cdn.example.com/2.m3u8"));
     expect(nextRunnableTask([first, second])?.episodeName).toBe("第02集");
     expect(retryTask([first, second], first.id)[0]).toMatchObject({ status: "queued", error: null });
+  });
+
+  it("暂停任务会跳过队列调度，继续后可再次被选中", () => {
+    const task = createQueueTask(request("第01集", "https://cdn.example.com/1.m3u8"));
+    const paused = updateQueueTask([task], task.id, { status: "paused" });
+    expect(nextRunnableTask(paused)).toBeNull();
+    expect(nextRunnableTask(updateQueueTask(paused, task.id, { status: "queued" }))?.id).toBe(task.id);
+  });
+
+  it("支持不限存储上限标签", () => {
+    expect(formatStorageLimit(0)).toBe("不限");
+    expect(formatStorageLimit(20 * 1024 * 1024 * 1024)).toBe("20 GB");
   });
 });

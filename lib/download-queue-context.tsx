@@ -2,7 +2,7 @@ import * as Network from "expo-network";
 import { AppState, type AppStateStatus, Platform } from "react-native";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
-import { downloadEpisodeOffline, getOfflineSummary, isOfflineDownloadSupported, type OfflineDownloadRequest } from "@/lib/offline-downloads";
+import { downloadEpisodeOffline, getOfflineSummary, isOfflineDownloadSupported, pauseOfflineDownload, removeOfflineDownloadByUrl, stopOfflineDownload, type OfflineDownloadRequest } from "@/lib/offline-downloads";
 import { getDownloadSettings, getQueueTasks, nextRunnableTask, retryTask, saveDownloadSettings, saveQueueTasks, type DownloadQueueTask, type DownloadSettings, updateQueueTask, upsertQueueTasks } from "@/lib/download-queue";
 
 interface DownloadQueueContextValue {
@@ -14,7 +14,8 @@ interface DownloadQueueContextValue {
   pauseTask: (id: string) => Promise<void>;
   resumeTask: (id: string) => Promise<void>;
   retry: (id: string) => Promise<void>;
-  removeTask: (id: string) => Promise<void>;
+  stopTask: (id: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
   updateSettings: (next: DownloadSettings) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -70,7 +71,7 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
     await commitTasks(updateQueueTask(tasksRef.current, task.id, { status: "downloading", error: null }));
     try {
       const summary = await getOfflineSummary();
-      if (summary.sizeBytes >= settingsRef.current.storageLimitBytes) throw new Error("已达到离线存储上限，请清理缓存或提高上限");
+      if (settingsRef.current.storageLimitBytes > 0 && summary.sizeBytes >= settingsRef.current.storageLimitBytes) throw new Error("已达到离线存储上限，请清理缓存或提高上限");
       await downloadEpisodeOffline(task, (progress) => {
         const next = updateQueueTask(tasksRef.current, task.id, { progress });
         tasksRef.current = next;
@@ -79,6 +80,8 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
       });
       await commitTasks(updateQueueTask(tasksRef.current, task.id, { status: "completed", progress: { downloadedBytes: 1, totalBytes: 1, fraction: 1 }, error: null }));
     } catch (error) {
+      const current = tasksRef.current.find((entry) => entry.id === task.id);
+      if (!current || current.status === "paused") return;
       await commitTasks(updateQueueTask(tasksRef.current, task.id, { status: "failed", error: error instanceof Error ? error.message : "下载失败，请重试" }));
     } finally {
       runningRef.current = false;
@@ -99,7 +102,8 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
 
   const pauseTask = useCallback(async (id: string) => {
     const task = tasksRef.current.find((item) => item.id === id);
-    if (!task || task.status !== "queued") return;
+    if (!task || (task.status !== "queued" && task.status !== "downloading")) return;
+    if (task.status === "downloading") await pauseOfflineDownload(task.remoteUrl);
     await commitTasks(updateQueueTask(tasksRef.current, id, { status: "paused" }));
   }, [commitTasks]);
 
@@ -108,14 +112,26 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
   }, [commitTasks]);
 
   const retry = useCallback(async (id: string) => { await commitTasks(retryTask(tasksRef.current, id)); }, [commitTasks]);
-  const removeTask = useCallback(async (id: string) => { await commitTasks(tasksRef.current.filter((task) => task.id !== id)); }, [commitTasks]);
+  const stopTask = useCallback(async (id: string) => {
+    const task = tasksRef.current.find((item) => item.id === id);
+    if (!task) return;
+    if (task.status === "downloading") await stopOfflineDownload(task.remoteUrl);
+    await commitTasks(tasksRef.current.filter((entry) => entry.id !== id));
+  }, [commitTasks]);
+  const deleteTask = useCallback(async (id: string) => {
+    const task = tasksRef.current.find((item) => item.id === id);
+    if (!task) return;
+    if (task.status === "downloading") await stopOfflineDownload(task.remoteUrl);
+    await removeOfflineDownloadByUrl(task.remoteUrl);
+    await commitTasks(tasksRef.current.filter((entry) => entry.id !== id));
+  }, [commitTasks]);
   const updateSettings = useCallback(async (next: DownloadSettings) => {
     settingsRef.current = next;
     setSettings(next);
     await saveDownloadSettings(next);
   }, []);
 
-  return <DownloadQueueContext.Provider value={{ tasks, settings, isWifi, isActive, enqueue, pauseTask, resumeTask, retry, removeTask, updateSettings, refresh }}>{children}</DownloadQueueContext.Provider>;
+  return <DownloadQueueContext.Provider value={{ tasks, settings, isWifi, isActive, enqueue, pauseTask, resumeTask, retry, stopTask, deleteTask, updateSettings, refresh }}>{children}</DownloadQueueContext.Provider>;
 }
 
 export function useDownloadQueue(): DownloadQueueContextValue {

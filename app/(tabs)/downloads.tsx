@@ -4,11 +4,12 @@ import { ScreenContainer } from "@/components/screen-container";
 import { formatStorageLimit, type DownloadQueueTask } from "@/lib/download-queue";
 import { useDownloadQueue } from "@/lib/download-queue-context";
 
-const LIMITS = [1, 2, 5].map((gigabytes) => gigabytes * 1024 * 1024 * 1024);
+const LIMITS = [5, 20, 50, 100].map((gigabytes) => gigabytes * 1024 * 1024 * 1024);
+const UNLIMITED = 0;
 
 export default function DownloadsScreen() {
-  const { tasks, settings, isWifi, isActive, pauseTask, resumeTask, retry, removeTask, updateSettings } = useDownloadQueue();
-  const actionableTasks = tasks.filter((task) => task.status !== "completed");
+  const { tasks, settings, isWifi, isActive, pauseTask, resumeTask, retry, stopTask, deleteTask, updateSettings } = useDownloadQueue();
+  const actionableTasks = tasks;
   const completedCount = tasks.filter((task) => task.status === "completed").length;
 
   return (
@@ -28,11 +29,11 @@ export default function DownloadsScreen() {
           <View style={styles.settingsCard}>
             <View style={styles.settingsHead}><View><Text style={styles.settingsTitle}>下载条件</Text><Text style={styles.settingsText}>仅 Wi‑Fi 自动下载</Text></View><Pressable onPress={() => settings && void updateSettings({ ...settings, wifiOnly: !settings.wifiOnly })} style={[styles.switchTrack, settings?.wifiOnly && styles.switchTrackActive]}><View style={[styles.switchKnob, settings?.wifiOnly && styles.switchKnobActive]} /></Pressable></View>
             <Text style={styles.settingsTitle}>离线存储上限</Text>
-            <View style={styles.limitRow}>{LIMITS.map((limit) => <Pressable key={limit} onPress={() => settings && void updateSettings({ ...settings, storageLimitBytes: limit })} style={({ pressed }) => [styles.limitChip, settings?.storageLimitBytes === limit && styles.limitChipActive, pressed && styles.pressed]}><Text style={[styles.limitText, settings?.storageLimitBytes === limit && styles.limitTextActive]}>{formatStorageLimit(limit)}</Text></Pressable>)}</View>
+            <View style={styles.limitRow}>{[...LIMITS, UNLIMITED].map((limit) => <Pressable key={limit} onPress={() => settings && void updateSettings({ ...settings, storageLimitBytes: limit })} style={({ pressed }) => [styles.limitChip, settings?.storageLimitBytes === limit && styles.limitChipActive, pressed && styles.pressed]}><Text style={[styles.limitText, settings?.storageLimitBytes === limit && styles.limitTextActive]}>{formatStorageLimit(limit)}</Text></Pressable>)}</View>
           </View>
           <View style={styles.queueHead}><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个进行中 · {completedCount} 个已完成</Text></View>
         </View>}
-        renderItem={({ item }) => <TaskCard task={item} onPause={() => void pauseTask(item.id)} onResume={() => void resumeTask(item.id)} onRetry={() => void retry(item.id)} onRemove={() => void removeTask(item.id)} />}
+        renderItem={({ item }) => <TaskCard task={item} onPause={() => void pauseTask(item.id)} onResume={() => void resumeTask(item.id)} onRetry={() => void retry(item.id)} onStop={() => void stopTask(item.id)} onDelete={() => void deleteTask(item.id)} />}
         ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyTitle}>下载队列为空</Text><Text style={styles.emptyText}>在影片详情页点击“下载本线路”，即可把整部剧集加入离线队列。</Text></View>}
         ListFooterComponent={completedCount > 0 ? <Text style={styles.footer}>已完成的剧集可在影片详情页直接离线播放。</Text> : null}
       />
@@ -40,10 +41,10 @@ export default function DownloadsScreen() {
   );
 }
 
-function TaskCard({ task, onPause, onResume, onRetry, onRemove }: { task: DownloadQueueTask; onPause: () => void; onResume: () => void; onRetry: () => void; onRemove: () => void }) {
+function TaskCard({ task, onPause, onResume, onRetry, onStop, onDelete }: { task: DownloadQueueTask; onPause: () => void; onResume: () => void; onRetry: () => void; onStop: () => void; onDelete: () => void }) {
   const progress = task.progress?.fraction !== null && task.progress?.fraction !== undefined ? Math.round(task.progress.fraction * 100) : null;
-  const label = task.status === "downloading" ? (progress === null ? "下载中" : `${progress}%`) : task.status === "queued" ? "队列中" : task.status === "paused" ? "已暂停" : "下载失败";
-  return <View style={styles.taskCard}><View style={styles.taskTop}><View style={styles.taskInfo}><Text numberOfLines={1} style={styles.taskTitle}>{task.vodName}</Text><Text numberOfLines={1} style={styles.taskMeta}>{task.sourceName} · {task.episodeName}</Text></View><Text style={[styles.status, task.status === "failed" && styles.statusFailed, task.status === "paused" && styles.statusPaused]}>{label}</Text></View>{task.status === "downloading" ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress ?? 4}%` }]} /></View> : null}{task.error ? <Text numberOfLines={2} style={styles.taskError}>{task.error}</Text> : null}<View style={styles.taskActions}>{task.status === "queued" ? <Action label="暂停" onPress={onPause} /> : null}{task.status === "paused" ? <Action label="继续" onPress={onResume} primary /> : null}{task.status === "failed" ? <Action label="重试" onPress={onRetry} primary /> : null}{task.status !== "downloading" ? <Action label="移除" onPress={onRemove} /> : null}</View></View>;
+  const label = task.status === "completed" ? "已完成" : task.status === "downloading" ? (progress === null ? "下载中" : `${progress}%`) : task.status === "queued" ? "队列中" : task.status === "paused" ? "已暂停" : "下载失败";
+  return <View style={styles.taskCard}><View style={styles.taskTop}><View style={styles.taskInfo}><Text numberOfLines={1} style={styles.taskTitle}>{task.vodName}</Text><Text numberOfLines={1} style={styles.taskMeta}>{task.sourceName} · {task.episodeName}</Text></View><Text style={[styles.status, task.status === "failed" && styles.statusFailed, task.status === "paused" && styles.statusPaused]}>{label}</Text></View>{task.status === "downloading" ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress ?? 4}%` }]} /></View> : null}{task.error ? <Text numberOfLines={2} style={styles.taskError}>{task.error}</Text> : null}<View style={styles.taskActions}>{task.status === "downloading" ? <><Action label="暂停" onPress={onPause} /><Action label="停止" onPress={onStop} /></> : null}{task.status === "queued" ? <><Action label="暂停" onPress={onPause} /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "paused" ? <><Action label="继续" onPress={onResume} primary /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "failed" ? <><Action label="重试" onPress={onRetry} primary /><Action label="删除" onPress={onDelete} /></> : null}{task.status === "completed" ? <Action label="删除" onPress={onDelete} /> : null}</View></View>;
 }
 
 function Action({ label, onPress, primary = false }: { label: string; onPress: () => void; primary?: boolean }) {

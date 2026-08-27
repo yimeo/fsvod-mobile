@@ -4,6 +4,9 @@ import { Platform } from "react-native";
 
 const INDEX_KEY = "fsvod:offline-downloads";
 const ROOT = `${FileSystem.documentDirectory ?? ""}fsvod-offline/`;
+type TransferState = "running" | "paused" | "stopped";
+type ActiveTransfer = { state: TransferState; resumable: FileSystem.DownloadResumable | null };
+const activeTransfers = new Map<string, ActiveTransfer>();
 
 export interface OfflineDownload {
   id: string;
@@ -90,7 +93,14 @@ async function getSize(uri: string): Promise<number> {
   return info.exists && typeof info.size === "number" ? info.size : 0;
 }
 
-async function downloadFile(url: string, targetUri: string, onProgress?: (progress: OfflineDownloadProgress) => void): Promise<void> {
+function throwIfInterrupted(remoteUrl: string): void {
+  const state = activeTransfers.get(remoteUrl)?.state;
+  if (state === "paused") throw new Error("DOWNLOAD_PAUSED");
+  if (state === "stopped") throw new Error("DOWNLOAD_STOPPED");
+}
+
+async function downloadFile(url: string, targetUri: string, onProgress?: (progress: OfflineDownloadProgress) => void, remoteUrl?: string): Promise<void> {
+  if (remoteUrl) throwIfInterrupted(remoteUrl);
   const task = FileSystem.createDownloadResumable(url, targetUri, {}, (event) => {
     const total = event.totalBytesExpectedToWrite > 0 ? event.totalBytesExpectedToWrite : null;
     onProgress?.({
@@ -99,8 +109,15 @@ async function downloadFile(url: string, targetUri: string, onProgress?: (progre
       fraction: total ? event.totalBytesWritten / total : null,
     });
   });
-  const result = await task.downloadAsync();
-  if (!result?.uri) throw new Error("媒体文件下载未完成");
+  const active = remoteUrl ? activeTransfers.get(remoteUrl) : null;
+  if (active) active.resumable = task;
+  try {
+    const result = await task.downloadAsync();
+    if (!result?.uri) throw new Error("媒体文件下载未完成");
+    if (remoteUrl) throwIfInterrupted(remoteUrl);
+  } finally {
+    if (active) active.resumable = null;
+  }
 }
 
 async function resolveHlsMediaPlaylist(url: string): Promise<{ url: string; content: string }> {
@@ -125,9 +142,10 @@ async function downloadHls(url: string, targetDir: string, onProgress?: (progres
   let downloaded = 0;
   let totalSize = 0;
   for (let index = 0; index < segments.length; index += 1) {
+    throwIfInterrupted(url);
     const remoteSegment = resolveUrl(segments[index].trim(), playlist.url);
     const localName = `segment-${String(index + 1).padStart(4, "0")}.${extensionFrom(remoteSegment, "ts")}`;
-    await downloadFile(remoteSegment, `${targetDir}${localName}`);
+    await downloadFile(remoteSegment, `${targetDir}${localName}`, undefined, url);
     totalSize += await getSize(`${targetDir}${localName}`);
     downloaded += 1;
     localNames.set(segments[index].trim(), localName);
@@ -164,6 +182,8 @@ export async function downloadEpisodeOffline(request: OfflineDownloadRequest, on
   await ensureRoot();
   const id = outputId(request);
   const targetDir = `${ROOT}${safeSegment(request.vodId)}-${hash(request.remoteUrl)}/`;
+  if (activeTransfers.has(request.remoteUrl)) throw new Error("该剧集正在下载");
+  activeTransfers.set(request.remoteUrl, { state: "running", resumable: null });
   try {
     let localUri: string;
     let sizeBytes: number;
@@ -176,7 +196,7 @@ export async function downloadEpisodeOffline(request: OfflineDownloadRequest, on
     } else {
       await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
       localUri = `${targetDir}offline.${extensionFrom(request.remoteUrl, "mp4")}`;
-      await downloadFile(request.remoteUrl, localUri, onProgress);
+      await downloadFile(request.remoteUrl, localUri, onProgress, request.remoteUrl);
       sizeBytes = await getSize(localUri);
       format = "file";
     }
@@ -187,7 +207,23 @@ export async function downloadEpisodeOffline(request: OfflineDownloadRequest, on
   } catch (error) {
     await FileSystem.deleteAsync(targetDir, { idempotent: true });
     throw error;
+  } finally {
+    activeTransfers.delete(request.remoteUrl);
   }
+}
+
+export async function pauseOfflineDownload(remoteUrl: string): Promise<void> {
+  const active = activeTransfers.get(remoteUrl);
+  if (!active) return;
+  active.state = "paused";
+  await active.resumable?.pauseAsync().catch(() => undefined);
+}
+
+export async function stopOfflineDownload(remoteUrl: string): Promise<void> {
+  const active = activeTransfers.get(remoteUrl);
+  if (!active) return;
+  active.state = "stopped";
+  await active.resumable?.pauseAsync().catch(() => undefined);
 }
 
 export async function removeOfflineDownload(id: string): Promise<void> {
@@ -198,6 +234,11 @@ export async function removeOfflineDownload(id: string): Promise<void> {
     await FileSystem.deleteAsync(folder, { idempotent: true });
   }
   await saveIndex(entries.filter((entry) => entry.id !== id));
+}
+
+export async function removeOfflineDownloadByUrl(remoteUrl: string): Promise<void> {
+  const target = await getOfflineDownload(remoteUrl);
+  if (target) await removeOfflineDownload(target.id);
 }
 
 export async function clearOfflineDownloads(): Promise<void> {

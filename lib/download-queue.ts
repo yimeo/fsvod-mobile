@@ -23,7 +23,7 @@ export interface DownloadSettings {
 
 export const DEFAULT_DOWNLOAD_SETTINGS: DownloadSettings = {
   wifiOnly: true,
-  storageLimitBytes: 2 * 1024 * 1024 * 1024,
+  storageLimitBytes: 20 * 1024 * 1024 * 1024,
 };
 
 export function createQueueTask(request: OfflineDownloadRequest): DownloadQueueTask {
@@ -61,6 +61,7 @@ export function retryTask(tasks: DownloadQueueTask[], id: string): DownloadQueue
 }
 
 export function formatStorageLimit(value: number): string {
+  if (value <= 0) return "不限";
   return `${Math.round(value / (1024 * 1024 * 1024))} GB`;
 }
 
