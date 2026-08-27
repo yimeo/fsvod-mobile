@@ -7,6 +7,7 @@ import {
   type MacCmsCategory,
   type MacCmsEndpoint,
 } from "@/lib/maccms";
+import { getOfficialResourceSyncState, OFFICIAL_RESOURCE_SYNC_INTERVAL_MS, syncOfficialResourceCatalog, type OfficialResourceSyncResult, type OfficialResourceSyncState } from "@/lib/official-resources";
 import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, replaceSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
 
 interface VodContextValue {
@@ -23,9 +24,16 @@ interface VodContextValue {
   updateSource: (id: string, address: string, displayName: string) => Promise<void>;
   reorderSource: (id: string, direction: -1 | 1) => Promise<void>;
   refreshCategories: () => Promise<void>;
+  officialResourceSync: OfficialResourceSyncState;
+  syncOfficialResources: (force?: boolean) => Promise<OfficialResourceSyncResult>;
 }
 
 const VodContext = createContext<VodContextValue | null>(null);
+
+function endpointFromOfficialAddress(address: string): MacCmsEndpoint {
+  const url = new URL(address);
+  return { inputDomain: url.origin, apiUrl: url.toString(), detectedAt: new Date().toISOString() };
+}
 
 export function VodProvider({ children }: { children: ReactNode }) {
   const [endpoint, setEndpoint] = useState<MacCmsEndpoint | null>(null);
@@ -33,6 +41,45 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<MacCmsCategory[]>([]);
   const [isBooting, setIsBooting] = useState(true);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
+
+  const syncOfficialResources = useCallback(async (force = false): Promise<OfficialResourceSyncResult> => {
+    const result = await syncOfficialResourceCatalog(force);
+    setOfficialResourceSync(result.state);
+    if (!result.success || result.skipped || !result.resources.length) return result;
+
+    let nextSources = await getSources();
+    const activeEndpoint = await getEndpoint();
+    for (const resource of result.resources) {
+      const existing = nextSources.find((source) => source.officialKey === resource.key) ?? nextSources.find((source) => source.endpoint.apiUrl === resource.address);
+      const nextEndpoint = existing?.endpoint.apiUrl === resource.address ? existing.endpoint : endpointFromOfficialAddress(resource.address);
+      const unchanged = existing?.sourceType === "official" && existing.officialKey === resource.key && existing.displayName === resource.name && existing.endpoint.apiUrl === nextEndpoint.apiUrl;
+      if (unchanged) continue;
+
+      if (existing?.officialKey === resource.key && existing.id !== nextEndpoint.apiUrl) {
+        nextSources = await replaceSource(existing.id, nextEndpoint, resource.name);
+        nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "unknown");
+      } else {
+        nextSources = await upsertSource(nextEndpoint, existing?.health ?? "unknown", existing?.lastError ?? null, resource.name, { sourceType: "official", officialKey: resource.key });
+      }
+
+      if (activeEndpoint?.apiUrl === existing?.id && activeEndpoint?.apiUrl !== nextEndpoint.apiUrl) {
+        await saveEndpoint(nextEndpoint);
+        setEndpoint(nextEndpoint);
+        try {
+          const page = await fetchVodPage(nextEndpoint, { page: 1 });
+          setCategories(buildCategoryTree([page.raw], page.items));
+          setSourceError(null);
+          nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "healthy");
+        } catch (error) {
+          setSourceError(error instanceof Error ? error.message : "更新后的官方数据源暂不可用");
+          nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "unhealthy", error instanceof Error ? error.message : "连接失败");
+        }
+      }
+    }
+    setSources(nextSources);
+    return result;
+  }, []);
 
   const refreshCategories = useCallback(async () => {
     if (!endpoint) return;
@@ -47,10 +94,12 @@ export function VodProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const bootstrap = async () => {
-      const [savedEndpoint, savedSources] = await Promise.all([getEndpoint(), getSources()]);
+      const [savedEndpoint, savedSources, savedOfficialResourceSync] = await Promise.all([getEndpoint(), getSources(), getOfficialResourceSyncState()]);
       setSources(savedSources);
       setEndpoint(savedEndpoint);
+      setOfficialResourceSync(savedOfficialResourceSync);
       setIsBooting(false);
+      void syncOfficialResources();
       if (!savedEndpoint) return;
       try {
         const page = await fetchVodPage(savedEndpoint, { page: 1 });
@@ -60,7 +109,12 @@ export function VodProvider({ children }: { children: ReactNode }) {
       }
     };
     void bootstrap();
-  }, []);
+  }, [syncOfficialResources]);
+
+  useEffect(() => {
+    const interval = setInterval(() => { void syncOfficialResources(); }, OFFICIAL_RESOURCE_SYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [syncOfficialResources]);
 
   const configureSource = useCallback(async (address: string, displayName?: string) => {
     const catalog = await discoverMacCms(address);
@@ -143,7 +197,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories }}>
+    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories, officialResourceSync, syncOfficialResources }}>
       {children}
     </VodContext.Provider>
   );

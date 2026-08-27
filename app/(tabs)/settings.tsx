@@ -14,7 +14,7 @@ import { clearQueueTasks, formatStorageLimit } from "@/lib/download-queue";
 interface CacheSummary { playbackLists: number; searches: number; history: number; videoBytes: number | null; offlineCount: number; offlineBytes: number }
 
 export default function SettingsScreen() {
-  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, updateSource, reorderSource, sourceError } = useVodSource();
+  const { endpoint, sources, categories, configureSource, switchSource, deleteSource, checkSource, updateSource, reorderSource, sourceError, officialResourceSync, syncOfficialResources } = useVodSource();
   const { settings } = useDownloadQueue();
   const router = useRouter();
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
@@ -22,6 +22,7 @@ export default function SettingsScreen() {
   const [newSourceAddress, setNewSourceAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [isOfficialSyncing, setIsOfficialSyncing] = useState(false);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [sourceDisplayName, setSourceDisplayName] = useState("");
   const [sourceAddress, setSourceAddress] = useState("");
@@ -84,6 +85,16 @@ export default function SettingsScreen() {
     setCheckingId(null);
   };
 
+  const runOfficialSync = async () => {
+    setIsOfficialSyncing(true);
+    try {
+      const result = await syncOfficialResources(true);
+      setMessage(result.success ? `官方资源已检查，当前可用 ${result.state.resourceCount} 个资源站。` : "官方资源暂时无法访问，已保留现有数据源。");
+    } finally {
+      setIsOfficialSyncing(false);
+    }
+  };
+
   const confirmDeleteSource = (source: SavedMacCmsSource) => {
     Alert.alert("删除数据源", `确定删除 ${source.displayName} 吗？`, [
       { text: "取消", style: "cancel" },
@@ -144,6 +155,7 @@ export default function SettingsScreen() {
         <View style={styles.preferenceCard}><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>仅在 Wi‑Fi 下载</Text><Text style={styles.preferenceText}>{settings?.wifiOnly ? "开启后不会使用移动数据下载剧集" : "已允许使用移动数据下载"}</Text></View><View style={[styles.preferencePill, settings?.wifiOnly && styles.preferencePillActive]}><Text style={styles.preferencePillText}>{settings?.wifiOnly ? "已开启" : "已关闭"}</Text></View></View><View style={styles.preferenceDivider} /><View style={styles.preferenceRow}><View><Text style={styles.preferenceTitle}>最大缓存容量</Text><Text style={styles.preferenceText}>当前 {formatBytes(cache.offlineBytes)} / {settings ? formatStorageLimit(settings.storageLimitBytes) : "—"}</Text></View><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.preferenceLink, pressed && styles.pressed]}><Text style={styles.preferenceLinkText}>管理 ›</Text></Pressable></View></View>
         <View style={styles.section}>
           <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>可添加、重命名、排序、切换与检测 MACCMS API。</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
+          <View style={[styles.officialSyncCard, officialResourceSync.lastError && styles.officialSyncCardWarning]}><View style={styles.officialSyncCopy}><View style={styles.officialSyncTitleRow}><Text style={styles.officialSyncTitle}>官方资源</Text><Text style={styles.officialSyncTag}>自动同步</Text></View><Text style={styles.officialSyncText}>{officialResourceSync.lastError ? "官方配置暂时无法访问，已保留现有数据源" : officialResourceSync.lastCheckedAt ? `已检查 ${officialResourceSync.resourceCount} 个资源站 · ${new Date(officialResourceSync.lastCheckedAt).toLocaleString("zh-CN")}` : "启动后会自动检查官方资源站更新"}</Text>{officialResourceSync.configUrl ? <Text numberOfLines={1} style={styles.officialSyncAddress}>{officialResourceSync.configUrl}</Text> : null}</View><Pressable disabled={isOfficialSyncing} onPress={() => void runOfficialSync()} style={({ pressed }) => [styles.officialSyncButton, (pressed || isOfficialSyncing) && styles.pressed]}>{isOfficialSyncing ? <ActivityIndicator size="small" color="#141821" /> : <Text style={styles.officialSyncButtonText}>检查更新</Text>}</Pressable></View>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
           {sources.length ? sources.map((source, index) => (
@@ -158,7 +170,7 @@ export default function SettingsScreen() {
                 <View style={styles.sourceTop}>
                   <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
                     <View style={[styles.sourceMark, endpoint?.apiUrl === source.id && styles.sourceMarkActive]}><Text style={styles.sourceMarkText}>{endpoint?.apiUrl === source.id ? "✓" : "•"}</Text></View>
-                    <View style={styles.sourceInfo}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={styles.sourceStatus}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text>{source.sourceType === "official" ? <Text style={styles.sourceOfficialTag}>官方</Text> : null}</View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={styles.sourceStatus}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? source.lastError || "连接异常" : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
                   </Pressable>
                   <Pressable accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed]}><Text style={styles.editSourceGlyph}>✎</Text></Pressable>
                 </View>
@@ -266,6 +278,16 @@ const styles = StyleSheet.create({
   sourceHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   sourceHeaderActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   sourceIntro: { color: "#8896AD", fontSize: 11, lineHeight: 16, marginTop: -6, marginBottom: 10 },
+  officialSyncCard: { flexDirection: "row", alignItems: "center", gap: 11, padding: 12, borderRadius: 13, marginBottom: 11, backgroundColor: "#102B2D", borderWidth: 1, borderColor: "#256965" },
+  officialSyncCardWarning: { backgroundColor: "#2C2630", borderColor: "#714F42" },
+  officialSyncCopy: { flex: 1, minWidth: 0 },
+  officialSyncTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  officialSyncTitle: { color: "#E9F6F4", fontSize: 13, lineHeight: 18, fontWeight: "900" },
+  officialSyncTag: { color: "#8AE2CA", backgroundColor: "#16463F", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  officialSyncText: { color: "#ADCEC8", fontSize: 10, lineHeight: 15, marginTop: 3 },
+  officialSyncAddress: { color: "#7DAEA6", fontSize: 9, lineHeight: 14, marginTop: 2, fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) },
+  officialSyncButton: { minWidth: 62, height: 33, paddingHorizontal: 8, borderRadius: 9, justifyContent: "center", alignItems: "center", backgroundColor: "#78D3B9" },
+  officialSyncButtonText: { color: "#11211F", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   sourceCount: { color: "#F5C66E", fontSize: 11, lineHeight: 16, fontWeight: "800", backgroundColor: "#2A2533", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   addSourceButton: { height: 37, paddingHorizontal: 12, borderRadius: 11, justifyContent: "center", backgroundColor: "#FFB84D" },
   addSourceButtonText: { color: "#141821", fontSize: 12, lineHeight: 17, fontWeight: "900" },
@@ -277,7 +299,9 @@ const styles = StyleSheet.create({
   sourceMarkActive: { backgroundColor: "#FFB84D" },
   sourceMarkText: { color: "#B5C4D9", fontSize: 20, lineHeight: 23, fontWeight: "900" },
   sourceInfo: { flex: 1, minWidth: 0 },
+  sourceNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   sourceName: { color: "#F2F5F9", fontSize: 15, lineHeight: 21, fontWeight: "900" },
+  sourceOfficialTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
   sourceAddress: { color: "#9AA9BE", fontSize: 10, lineHeight: 15, marginTop: 1, fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }) },
   sourceStatus: { color: "#7FD0A4", fontSize: 10, lineHeight: 15, marginTop: 1 },
   editSourceButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#202A3D", justifyContent: "center", alignItems: "center" },

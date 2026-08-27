@@ -37,6 +37,8 @@ export interface SavedMacCmsSource {
   id: string;
   endpoint: MacCmsEndpoint;
   displayName: string;
+  sourceType?: "official" | "custom";
+  officialKey?: string;
   health: SourceHealth;
   lastCheckedAt: string | null;
   lastError: string | null;
@@ -85,11 +87,23 @@ export function saveSources(sources: SavedMacCmsSource[]): Promise<void> {
   return AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(sources));
 }
 
-export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null, displayName?: string): Promise<SavedMacCmsSource[]> {
+export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null, displayName?: string, metadata?: Pick<SavedMacCmsSource, "sourceType" | "officialKey">): Promise<SavedMacCmsSource[]> {
   const sources = await getSources();
-  const current = sources.find((source) => source.id === sourceId(endpoint));
-  const entry: SavedMacCmsSource = { id: sourceId(endpoint), endpoint, displayName: displayName?.trim() || current?.displayName || endpoint.inputDomain, health, lastCheckedAt: new Date().toISOString(), lastError };
-  const next = [entry, ...sources.filter((source) => source.id !== entry.id)];
+  const currentIndex = sources.findIndex((source) => source.id === sourceId(endpoint));
+  const current = currentIndex >= 0 ? sources[currentIndex] : undefined;
+  const entry: SavedMacCmsSource = {
+    id: sourceId(endpoint),
+    endpoint,
+    displayName: displayName?.trim() || current?.displayName || endpoint.inputDomain,
+    sourceType: metadata?.sourceType ?? current?.sourceType,
+    officialKey: metadata?.officialKey ?? current?.officialKey,
+    health,
+    lastCheckedAt: new Date().toISOString(),
+    lastError,
+  };
+  const next = current
+    ? sources.map((source) => source.id === entry.id ? entry : source)
+    : metadata?.sourceType === "official" ? [...sources, entry] : [entry, ...sources];
   await saveSources(next);
   return next;
 }
@@ -102,6 +116,8 @@ export async function replaceSource(id: string, endpoint: MacCmsEndpoint, displa
     id: sourceId(endpoint),
     endpoint,
     displayName: displayName.trim() || current?.displayName || endpoint.inputDomain,
+    sourceType: current?.sourceType,
+    officialKey: current?.officialKey,
     health: "healthy",
     lastCheckedAt: new Date().toISOString(),
     lastError: null,
