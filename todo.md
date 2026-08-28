@@ -168,3 +168,6 @@
 - [x] 在“我的”页底部显示版本信息 fsvod-mobile-1.1.0
 - [x] 修复所有 Android 版本中未开始播放时切换线路或返回详情的闪退
 - [x] 将跨 Android 播放器稳定性修复推送至 GitHub 仓库 yimeo/fsvod-mobile
+- [x] 在官方 Expo 页面切换账户并确认构建配额状态（yimeo 免费套餐，Android 15/15 已用尽）
+- [x] 将 Expo 构建归属切换至 yimeos-team
+- [ ] 在管理界面使用 yimeos-team 生成 Android 测试包
