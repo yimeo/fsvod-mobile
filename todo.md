@@ -177,3 +177,4 @@
 - [x] 快速切换资源弹窗显示当前使用标识和明确的连接状态文案
 - [x] 补充 GitHub README，说明功能、运行方式与本地 Android 构建
 - [x] 为 GitHub README 采集并加入应用界面截图
+- [x] 修复官方 JSON 主 API 失败时的备用回退，以及新 primaryApi/backupApi 地址组整体替换持久化

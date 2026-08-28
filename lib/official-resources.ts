@@ -178,7 +178,8 @@ export async function loadOfficialResourceCatalog(configEndpoints?: string[], re
           const updated = parseOfficialResourceConfig(await request(replacementEndpoints[0]));
           return { configUrl: replacementEndpoints[0], configEndpoints: replacementEndpoints, resources: updated.resources.length ? updated.resources : parsed.resources };
         } catch {
-          return { configUrl, configEndpoints: uniqueCandidates, resources: parsed.resources };
+          // 备用配置已经明确下发了新的主备地址；即使新主地址暂时不可访问，也必须保存新地址组，下一次同步再重试。
+          return { configUrl: replacementEndpoints[0], configEndpoints: replacementEndpoints, resources: parsed.resources };
         }
       }
       return { configUrl, configEndpoints: uniqueCandidates, resources: parsed.resources };

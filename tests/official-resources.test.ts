@@ -45,4 +45,17 @@ describe("官方资源配置", () => {
     expect(requested).toEqual(["https://api1.066821.xyz/api.json", "https://api2.066821.xyz/api.json", "https://new-api.example.com/api.json"]);
     expect(catalog).toMatchObject({ configUrl: "https://new-api.example.com/api.json", configEndpoints: ["https://new-api.example.com/api.json", "https://new-backup.example.com/api.json"], resources: [{ name: "新版官方源" }] });
   });
+
+  it("新主地址暂不可达时仍保存备用配置下发的新主备地址组", async () => {
+    const requested: string[] = [];
+    const catalog = await loadOfficialResourceCatalog(undefined, async (url) => {
+      requested.push(url);
+      if (url.includes("api1")) throw new Error("主地址不可用");
+      if (url.includes("api2")) return { primaryApi: "https://api.066821.xyz/api.json", backupApi: "http://api.086123.xyz/api.json", sources: [{ name: "新版官方源", api: "https://new-source.example.com/api.php/provide/vod/" }] };
+      throw new Error("新主暂不可达");
+    });
+
+    expect(requested).toEqual(["https://api1.066821.xyz/api.json", "https://api2.066821.xyz/api.json", "https://api.066821.xyz/api.json"]);
+    expect(catalog).toMatchObject({ configUrl: "https://api.066821.xyz/api.json", configEndpoints: ["https://api.066821.xyz/api.json", "http://api.086123.xyz/api.json"], resources: [{ name: "新版官方源" }] });
+  });
 });
