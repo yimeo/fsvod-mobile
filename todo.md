@@ -171,3 +171,5 @@
 - [x] 在官方 Expo 页面切换账户并确认构建配额状态（yimeo 免费套餐，Android 15/15 已用尽）
 - [x] 将 Expo 构建归属切换至 yimeos-team
 - [ ] 在管理界面使用 yimeos-team 生成 Android 测试包
+- [ ] 排查 Expo 构建流程未使用 yimeos-team 团队额度的问题
+- [x] 编写飞鸿影院 Android 本地构建、安装与签名准备说明
