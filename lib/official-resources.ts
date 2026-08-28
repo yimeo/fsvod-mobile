@@ -3,8 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { toChineseNetworkError } from "./network-error";
 
 export const OFFICIAL_RESOURCE_CONFIG_URLS = [
-  "https://api1.066821.xyz/api.json",
-  "https://api2.066821.xyz/api.json",
+  "https://api.075700.xyz/api.json",
+  "http://api.07571800.xyz/api.json",
 ] as const;
 
 export const OFFICIAL_RESOURCE_SYNC_INTERVAL_MS = 30 * 60 * 1000;
@@ -144,11 +144,30 @@ export function parseOfficialResourceConfig(payload: unknown): { primaryApi: str
   return { primaryApi, backupApi, configUrls: [...configUrls], resources };
 }
 
+function buildFreshConfigRequestUrl(url: string): string {
+  const cacheBust = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("__fsvod_nocache", cacheBust);
+    return parsed.toString();
+  } catch {
+    return `${url}${url.includes("?") ? "&" : "?"}__fsvod_nocache=${encodeURIComponent(cacheBust)}`;
+  }
+}
+
 async function requestOfficialConfig(url: string): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(url, { headers: { Accept: "application/json, text/plain, */*" }, signal: controller.signal });
+    const response = await fetch(buildFreshConfigRequestUrl(url), {
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Cache-Control": "no-cache, no-store, max-age=0",
+        Pragma: "no-cache",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.text();
     return JSON.parse(body.replace(/^\uFEFF/, "")) as unknown;
@@ -178,11 +197,11 @@ export async function loadOfficialResourceCatalog(configEndpoints?: string[], re
           const updated = parseOfficialResourceConfig(await request(replacementEndpoints[0]));
           return { configUrl: replacementEndpoints[0], configEndpoints: replacementEndpoints, resources: updated.resources.length ? updated.resources : parsed.resources };
         } catch {
-          // 备用配置已经明确下发了新的主备地址；即使新主地址暂时不可访问，也必须保存新地址组，下一次同步再重试。
-          return { configUrl: replacementEndpoints[0], configEndpoints: replacementEndpoints, resources: parsed.resources };
+          return { configUrl, configEndpoints: replacementEndpoints, resources: parsed.resources };
         }
       }
-      return { configUrl, configEndpoints: uniqueCandidates, resources: parsed.resources };
+      const activeEndpoints = replacementEndpoints ?? uniqueCandidates.slice(0, 2);
+      return { configUrl, configEndpoints: activeEndpoints, resources: parsed.resources };
     } catch (error) {
       latestError = error;
     }
@@ -218,7 +237,8 @@ export async function syncOfficialResourceCatalog(force = false): Promise<Offici
   }
 
   try {
-    const catalog = await loadOfficialResourceCatalog(previous.configEndpoints);
+    // Put the current official pair first so an older persisted endpoint group cannot block updates.
+    const catalog = await loadOfficialResourceCatalog([...DEFAULT_OFFICIAL_CONFIG_ENDPOINTS, ...previous.configEndpoints]);
     const resourceSignature = signatureFor(catalog.resources);
     const state: OfficialResourceSyncState = {
       configUrl: catalog.configUrl,

@@ -3,15 +3,15 @@ import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, Style
 import { Image } from "expo-image";
 import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { SourceQuickSwitcher } from "@/components/source-quick-switcher";
-import { DEFAULT_LIST_PAGE_SIZE, clearPlaybackLists, clearSearches, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
-import { clearOfflineDownloads, getOfflineSummary } from "@/lib/offline-downloads";
+import { DEFAULT_LIST_PAGE_SIZE, clearPlaybackLists, clearPosterCache, clearSearches, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { clearOfflineDownloads, getOfflineSummary, getVideoCacheSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
 import { clearCompletedQueueTasks } from "@/lib/download-queue";
 import { toChineseNetworkError } from "@/lib/network-error";
-import { clearPosterCache, getPosterCacheSummary } from "@/lib/poster-cache";
 
 interface CacheSummary { playbackLists: number; searches: number; history: number; posterCount: number; posterBytes: number; videoBytes: number; offlineCount: number; offlineBytes: number }
 
@@ -48,26 +48,30 @@ export default function SettingsScreen() {
   const activeSource = sources.find((source) => source.id === endpoint?.apiUrl);
   const activeSourceTone = activeSource?.health === "healthy" ? "healthy" : activeSource?.health === "unhealthy" ? "unhealthy" : "unknown";
   const clearableRecordCount = cache.playbackLists + cache.searches + cache.history + cache.offlineCount;
-  const clearableMediaBytes = cache.posterBytes + cache.videoBytes + cache.offlineBytes;
+  const clearableMediaBytes = cache.videoBytes + cache.offlineBytes;
+  const displayedVideoBytes = Math.max(cache.videoBytes, cache.offlineBytes);
   const availableClearTargets = ["playlist", "searches", "posters", "history", "offline", "video"] as CacheClearTarget[];
   const isAllClearTargetsSelected = availableClearTargets.every((target) => selectedClearTargets.includes(target));
 
   const loadCacheSummary = useCallback(async () => {
-    const [local, offline, posters] = await Promise.all([getLocalCacheSummary(), getOfflineSummary(), getPosterCacheSummary()]);
+    const local = await getLocalCacheSummary();
+    const offline = await getOfflineSummary();
     let videoBytes = 0;
     if (Platform.OS === "android") {
       try {
-        videoBytes = getCurrentVideoCacheSize();
+        const nativeBytes = getCurrentVideoCacheSize();
+        const scanned = await getVideoCacheSummary();
+        videoBytes = Math.max(nativeBytes, scanned.sizeBytes);
       } catch {
         videoBytes = 0;
       }
     }
-    setCache({ ...local, posterCount: posters.count, posterBytes: posters.bytes, videoBytes, offlineCount: offline.count, offlineBytes: offline.sizeBytes });
+    setCache({ ...local, videoBytes, offlineCount: offline.count, offlineBytes: offline.sizeBytes });
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void loadCacheSummary();
-  }, [endpoint, loadCacheSummary]);
+  }, [loadCacheSummary]));
 
   useEffect(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
@@ -228,20 +232,20 @@ export default function SettingsScreen() {
           <View style={styles.cacheGrid}>
             <CacheItem label="播放列表" value={String(cache.playbackLists)} />
             <CacheItem label="搜索记录" value={String(cache.searches)} />
-            <CacheItem label="海报缓存" value={`${cache.posterCount} 张 · ${formatBytes(cache.posterBytes)}`} />
             <CacheItem label="观看记录" value={String(cache.history)} />
-            <CacheItem label="视频缓存" value={formatBytes(cache.videoBytes)} />
+            <CacheItem label="海报缓存" value={`${cache.posterCount} · ${formatBytes(cache.posterBytes)}`} />
+            <CacheItem label="视频缓存" value={formatBytes(displayedVideoBytes)} />
             <CacheItem label="离线剧集" value={`${cache.offlineCount} · ${formatBytes(cache.offlineBytes)}`} />
           </View>
-          <View style={styles.cacheClearPreview}><Text style={styles.cacheClearPreviewTitle}>清理前预估</Text><Text style={styles.cacheClearPreviewText}>可释放 {formatBytes(clearableMediaBytes)} 的海报、视频与离线缓存，并清除 {clearableRecordCount} 项播放、搜索和观看数据；当前海报缓存 {cache.posterCount} 张。</Text></View>
+          <View style={styles.cacheClearPreview}><Text style={styles.cacheClearPreviewTitle}>清理前预估</Text><Text style={styles.cacheClearPreviewText}>可释放 {formatBytes(clearableMediaBytes)} 的视频与离线缓存，并按所选项目清理 {clearableRecordCount} 项本地数据；其中已命中的海报缓存为 {cache.posterCount} · {formatBytes(cache.posterBytes)}。</Text></View>
           <Pressable disabled={isClearingCache} onPress={openCacheClearPanel} style={({ pressed }) => [styles.secondaryButton, isClearingCache && styles.disabled, pressed && styles.pressed]}>{isClearingCache ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#B7D6F7" size="small" /><Text style={styles.secondaryText}>正在清理…</Text></View> : <Text style={styles.secondaryText}>清理本地缓存</Text>}</Pressable>
-          {selectedClearTargets.length ? <View style={styles.clearSelectionPanel}><View style={styles.clearSelectionHeading}><View><Text style={styles.clearSelectionTitle}>选择要清理的内容</Text><Text style={styles.clearSelectionSubtitle}>支持单项、多项或全部勾选</Text></View><Pressable onPress={selectAllClearTargets} style={({ pressed }) => [styles.selectAllButton, pressed && styles.pressed]}><Text style={styles.selectAllText}>{isAllClearTargetsSelected ? "取消全选" : "全选"}</Text></Pressable></View>{availableClearTargets.map((target) => { const checked = selectedClearTargets.includes(target); const meta = target === "playlist" ? `${cache.playbackLists} 个列表` : target === "searches" ? `${cache.searches} 条记录` : target === "posters" ? `${cache.posterCount} 张 · ${formatBytes(cache.posterBytes)}` : target === "history" ? `${cache.history} 条记录` : target === "offline" ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : formatBytes(cache.videoBytes); return <Pressable key={target} onPress={() => toggleClearTarget(target)} style={({ pressed }) => [styles.clearChoice, checked && styles.clearChoiceChecked, pressed && styles.pressed]}><View style={[styles.checkMark, checked && styles.checkMarkChecked]}><Text style={styles.checkMarkText}>{checked ? "✓" : ""}</Text></View><View style={styles.clearChoiceCopy}><Text style={styles.clearChoiceTitle}>{CACHE_CLEAR_LABELS[target]}</Text><Text style={styles.clearChoiceMeta}>{meta}</Text></View></Pressable>; })}<View style={styles.clearSelectionActions}><Pressable onPress={() => setSelectedClearTargets([])} style={({ pressed }) => [styles.clearSelectionCancel, pressed && styles.pressed]}><Text style={styles.clearSelectionCancelText}>取消</Text></Pressable><Pressable disabled={isClearingCache || selectedClearTargets.length === 0} onPress={() => void runSelectedCacheClear()} style={({ pressed }) => [styles.clearSelectionConfirm, (pressed || selectedClearTargets.length === 0) && styles.disabled]}><Text style={styles.clearSelectionConfirmText}>确认清理（{selectedClearTargets.length}）</Text></Pressable></View></View> : null}
+          {selectedClearTargets.length ? <View style={styles.clearSelectionPanel}><View style={styles.clearSelectionHeading}><View><Text style={styles.clearSelectionTitle}>选择要清理的内容</Text><Text style={styles.clearSelectionSubtitle}>支持单项、多项或全部勾选</Text></View><Pressable onPress={selectAllClearTargets} style={({ pressed }) => [styles.selectAllButton, pressed && styles.pressed]}><Text style={styles.selectAllText}>{isAllClearTargetsSelected ? "取消全选" : "全选"}</Text></Pressable></View>{availableClearTargets.map((target) => { const checked = selectedClearTargets.includes(target); const meta = target === "playlist" ? `${cache.playbackLists} 个列表` : target === "searches" ? `${cache.searches} 条记录` : target === "posters" ? `${cache.posterCount} · ${formatBytes(cache.posterBytes)}` : target === "history" ? `${cache.history} 条记录` : target === "offline" ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : formatBytes(displayedVideoBytes); return <Pressable key={target} onPress={() => toggleClearTarget(target)} style={({ pressed }) => [styles.clearChoice, checked && styles.clearChoiceChecked, pressed && styles.pressed]}><View style={[styles.checkMark, checked && styles.checkMarkChecked]}><Text style={styles.checkMarkText}>{checked ? "✓" : ""}</Text></View><View style={styles.clearChoiceCopy}><Text style={styles.clearChoiceTitle}>{CACHE_CLEAR_LABELS[target]}</Text><Text style={styles.clearChoiceMeta}>{meta}</Text></View></Pressable>; })}<View style={styles.clearSelectionActions}><Pressable onPress={() => setSelectedClearTargets([])} style={({ pressed }) => [styles.clearSelectionCancel, pressed && styles.pressed]}><Text style={styles.clearSelectionCancelText}>取消</Text></Pressable><Pressable disabled={isClearingCache || selectedClearTargets.length === 0} onPress={() => void runSelectedCacheClear()} style={({ pressed }) => [styles.clearSelectionConfirm, (pressed || selectedClearTargets.length === 0) && styles.disabled]}><Text style={styles.clearSelectionConfirmText}>确认清理（{selectedClearTargets.length}）</Text></Pressable></View></View> : null}
           {cacheMessage ? <Text style={styles.cacheMessage}>{cacheMessage}</Text> : null}
-          <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
+          <Text style={styles.cacheHint}>影片播放线路和剧集信息会保存在设备中；海报使用磁盘缓存，显示实际占用大小。已下载的 MP4、WebM 或无加密点播 HLS 会保存在应用离线空间，可在无网络时播放。</Text>
         </View>
         <View style={styles.paginationCard}><Text style={styles.paginationTitle}>分类与搜索翻页模式</Text><Text style={styles.paginationText}>默认自动加载；自动、手动和经典模式默认每页 24 条。</Text><View style={styles.paginationOptions}><Pressable onPress={() => setPageMode("auto")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "auto" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "auto" && styles.paginationOptionTextActive]}>自动加载</Text></Pressable><Pressable onPress={() => setPageMode("manual")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "manual" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "manual" && styles.paginationOptionTextActive]}>手动加载</Text></Pressable><Pressable onPress={() => setPageMode("classic")} style={({ pressed }) => [styles.paginationOption, categoryPageMode === "classic" && styles.paginationOptionActive, pressed && styles.pressed]}><Text style={[styles.paginationOptionText, categoryPageMode === "classic" && styles.paginationOptionTextActive]}>经典模式</Text></Pressable></View>{categoryPageMode === "classic" ? <View style={styles.classicPageSize}><View><Text style={styles.classicPageSizeTitle}>经典模式每页条数</Text><Text style={styles.classicPageSizeText}>当前每页显示 {classicPageSize} 条内容</Text></View><View style={styles.classicPageSizeOptions}>{([12, 24, 30, 60] as CategoryClassicPageSize[]).map((size) => <Pressable key={size} onPress={() => setClassicPageSizePreference(size)} style={({ pressed }) => [styles.classicPageSizeOption, classicPageSize === size && styles.classicPageSizeOptionActive, pressed && styles.pressed]}><Text style={[styles.classicPageSizeOptionText, classicPageSize === size && styles.classicPageSizeOptionTextActive]}>{size}</Text></Pressable>)}</View></View> : null}</View>
         <View style={styles.note}><Text style={styles.noteTitle}>播放说明</Text><Text style={styles.noteText}>支持直接播放的常见 MP4、M3U8 等地址会进入原生播放器。其他网页型地址会保留清晰提示，以便你在浏览器中打开。</Text></View>
-        <Text style={styles.versionInfo}>fsvod-mobile-1.1.0</Text>
+        <View style={styles.versionFooter}><Text style={styles.versionText}>fsvod-mobile-1.2.5</Text><Text style={styles.versionHint}>Android 独立侧载版</Text></View>
       </ScrollView>
       <Modal visible={isAddModalVisible} transparent animationType="fade" onRequestClose={() => setIsAddModalVisible(false)}>
         <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeading}><View><Text style={styles.modalTitle}>添加资源</Text><Text style={styles.modalSubtitle}>名称和地址都可以随时编辑</Text></View><Pressable onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}><Text style={styles.modalCloseText}>×</Text></Pressable></View><Text style={styles.label}>数据源名称</Text><TextInput value={newSourceName} onChangeText={setNewSourceName} autoCorrect={false} returnKeyType="next" placeholder="可选，例如：主线路" placeholderTextColor="#71809B" style={styles.input} /><Text style={styles.fieldHint}>留空时自动使用域名，例如 example.com。</Text><Text style={[styles.label, styles.addressLabel]}>数据源地址</Text><TextInput value={newSourceAddress} onChangeText={setNewSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} /><View style={styles.modalActions}><Pressable onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalCancel, pressed && styles.pressed]}><Text style={styles.modalCancelText}>取消</Text></Pressable><Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.modalConfirm, (pressed || isSaving) && styles.pressed]}>{isSaving ? <ActivityIndicator color="#10182B" size="small" /> : <Text style={styles.modalConfirmText}>添加并识别</Text>}</Pressable></View></View></View>
@@ -393,7 +397,9 @@ const styles = StyleSheet.create({
   secondaryText: { color: "#B7D6F7", fontWeight: "700", fontSize: 13 },
   cacheMessage: { color: "#A9E2BE", fontSize: 11, lineHeight: 17, marginTop: 8, fontWeight: "700" },
   cacheHint: { color: "#8592AB", fontSize: 11, lineHeight: 17, marginTop: 10 },
-  versionInfo: { alignSelf: "center", color: "#697992", fontSize: 11, lineHeight: 16, letterSpacing: 0.3, marginTop: 22, marginBottom: 4 },
+  versionFooter: { alignItems: "center", paddingTop: 25, paddingBottom: 4 },
+  versionText: { color: "#7F8FA8", fontSize: 11, lineHeight: 16, fontWeight: "800", letterSpacing: 0.2 },
+  versionHint: { color: "#59677B", fontSize: 10, lineHeight: 15, marginTop: 2 },
   modalBackdrop: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(2, 5, 12, 0.74)" },
   modalCard: { borderRadius: 20, padding: 18, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#35435D" },
   modalHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 19 },

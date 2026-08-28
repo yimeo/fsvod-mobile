@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Image } from "expo-image";
+import * as FileSystem from "expo-file-system/legacy";
 
 import type { MacCmsEndpoint, MacCmsEpisode, MacCmsPlaySource, MacCmsVodDetail } from "@/lib/maccms";
 
@@ -11,6 +13,8 @@ const HISTORY_KEY = `${PREFIX}history`;
 const CATEGORY_ORDER_KEY = `${PREFIX}category-order`;
 const CATEGORY_PAGE_MODE_KEY = `${PREFIX}category-page-mode`;
 const CATEGORY_CLASSIC_PAGE_SIZE_KEY = `${PREFIX}category-classic-page-size`;
+const POSTER_CACHE_KEY = `${PREFIX}poster-cache-urls`;
+const MAX_TRACKED_POSTERS = 360;
 
 export type CategoryPageMode = "auto" | "manual" | "classic";
 export type CategoryClassicPageSize = 12 | 24 | 30 | 60;
@@ -236,15 +240,98 @@ export function clearSearches(): Promise<void> {
 
 export async function clearLocalVodData(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
-  const cacheKeys = keys.filter((key) => key.startsWith(DETAIL_PREFIX) || key === SEARCH_KEY || key === HISTORY_KEY);
+  const cacheKeys = keys.filter((key) => key.startsWith(DETAIL_PREFIX) || key === SEARCH_KEY || key === HISTORY_KEY || key === POSTER_CACHE_KEY);
   if (cacheKeys.length) await AsyncStorage.multiRemove(cacheKeys);
 }
 
-export async function getLocalCacheSummary(): Promise<{ playbackLists: number; searches: number; history: number }> {
+function normalizePosterUrl(value: string): string | null {
+  const url = value.trim();
+  return /^https?:\/\//i.test(url) ? url : null;
+}
+
+async function getTrackedPosterUrls(): Promise<string[]> {
+  const values = await getJson<string[]>(POSTER_CACHE_KEY, []);
+  return [...new Set(values.map(normalizePosterUrl).filter((value): value is string => Boolean(value)))].slice(0, MAX_TRACKED_POSTERS);
+}
+
+function collectPosterCandidates(value: unknown, output: Set<string>, keyHint = ""): void {
+  if (typeof value === "string") {
+    const normalized = normalizePosterUrl(value);
+    const looksLikePoster = /poster|cover|pic|thumb|image|vod_pic|backdrop/i.test(keyHint) || /\.(?:jpe?g|png|webp|gif)(?:[?#]|$)/i.test(normalized || "");
+    if (normalized && looksLikePoster) output.add(normalized);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectPosterCandidates(item, output, keyHint));
+    return;
+  }
+  if (value && typeof value === "object") Object.entries(value).forEach(([key, item]) => collectPosterCandidates(item, output, key));
+}
+
+async function getKnownPosterUrls(): Promise<string[]> {
+  const tracked = await getTrackedPosterUrls();
   const keys = await AsyncStorage.getAllKeys();
+  const sourceKeys = keys.filter((key) => key.startsWith(DETAIL_PREFIX) || key === HISTORY_KEY);
+  const values = await Promise.all(sourceKeys.map((key) => AsyncStorage.getItem(key)));
+  const candidates = new Set(tracked);
+  values.forEach((raw) => {
+    if (!raw) return;
+    try { collectPosterCandidates(JSON.parse(raw) as unknown, candidates); } catch { /* ignore malformed legacy data */ }
+  });
+  return [...candidates].slice(0, MAX_TRACKED_POSTERS);
+}
+
+let posterWriteQueue: Promise<void> = Promise.resolve();
+
+export function rememberPosterCache(url: string): Promise<void> {
+  const normalized = normalizePosterUrl(url);
+  if (!normalized) return Promise.resolve();
+  posterWriteQueue = posterWriteQueue.then(async () => {
+    const current = await getTrackedPosterUrls();
+    const next = [normalized, ...current.filter((item) => item !== normalized)].slice(0, MAX_TRACKED_POSTERS);
+    await AsyncStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(next));
+  }).catch(() => undefined);
+  return posterWriteQueue;
+}
+
+export async function clearPosterCache(): Promise<void> {
+  await Promise.allSettled([Image.clearMemoryCache(), Image.clearDiskCache()]);
+  await AsyncStorage.removeItem(POSTER_CACHE_KEY);
+}
+
+function toFileUri(path: string): string {
+  // expo-image Android returns Glide's absolute path (for example
+  // /data/user/0/.../image) while expo-file-system expects file:// URIs.
+  return path.startsWith("file://") ? path : path.startsWith("/") ? `file://${path}` : path;
+}
+
+export async function getPosterCacheSummary(): Promise<{ count: number; bytes: number }> {
+  const tracked = await getKnownPosterUrls();
+  const resolved = await Promise.all(tracked.map(async (url) => {
+    try {
+      const path = await Image.getCachePathAsync(url);
+      if (!path) return null;
+      const info = await FileSystem.getInfoAsync(toFileUri(path));
+      if (!info.exists) return null;
+      return { url, bytes: typeof info.size === "number" ? info.size : 0 };
+    } catch {
+      return null;
+    }
+  }));
+  const cached = resolved.filter((item): item is { url: string; bytes: number } => Boolean(item));
+  const cachedUrls = cached.map((item) => item.url);
+  if (cachedUrls.length !== tracked.length) await AsyncStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(cachedUrls));
+  return { count: cached.length || tracked.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
+}
+
+export async function getLocalCacheSummary(): Promise<{ playbackLists: number; searches: number; history: number; posterCount: number; posterBytes: number }> {
+  const keys = await AsyncStorage.getAllKeys();
+  const [searches, history, posterCache] = await Promise.all([getSearches(), getWatchHistory(), getPosterCacheSummary()]);
   return {
     playbackLists: keys.filter((key) => key.startsWith(DETAIL_PREFIX)).length,
-    searches: (await getSearches()).length,
-    history: (await getWatchHistory()).length,
+    searches: searches.length,
+    history: history.length,
+    posterCount: posterCache.count,
+    posterBytes: posterCache.bytes,
   };
 }

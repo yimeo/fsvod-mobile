@@ -250,3 +250,45 @@ export async function getOfflineSummary(): Promise<{ count: number; sizeBytes: n
   const downloads = await getOfflineDownloads();
   return { count: downloads.length, sizeBytes: downloads.reduce((sum, item) => sum + item.sizeBytes, 0) };
 }
+
+const MEDIA_CACHE_EXTENSIONS = /\.(?:mp4|m4v|webm|m3u8|ts|m4s|aac|mp3|mov|flac|ogg|wav)(?:[?#]|$)/i;
+const NON_MEDIA_CACHE_EXTENSIONS = /\.(?:jpg|jpeg|png|webp|gif|json|db|sqlite|lock|tmp|log|xml|txt)(?:[?#]|$)/i;
+const LEGACY_PLAYER_CACHE_MIN_BYTES = 64 * 1024;
+
+/**
+ * 1.1.0 used the native player's cache directory directly. Depending on the
+ * Android/ExoPlayer version those files may have a media suffix, or may be
+ * opaque extensionless files. Keep this deliberately broad so the settings
+ * page reports the cache that actually occupies disk space on the device.
+ */
+async function scanMediaDirectory(directoryUri: string): Promise<{ count: number; sizeBytes: number }> {
+  let count = 0;
+  let sizeBytes = 0;
+  let entries: string[] = [];
+  try { entries = await FileSystem.readDirectoryAsync(directoryUri); } catch { return { count, sizeBytes }; }
+  for (const entry of entries) {
+    const uri = `${directoryUri}${entry}`;
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.isDirectory) {
+        const nested = await scanMediaDirectory(`${uri}/`);
+        count += nested.count;
+        sizeBytes += nested.sizeBytes;
+        continue;
+      }
+      if (!info.exists || typeof info.size !== "number" || info.size <= 0) continue;
+      const isNamedMedia = MEDIA_CACHE_EXTENSIONS.test(entry);
+      const isLegacyOpaqueMedia = !NON_MEDIA_CACHE_EXTENSIONS.test(entry) && info.size >= LEGACY_PLAYER_CACHE_MIN_BYTES;
+      if (isNamedMedia || isLegacyOpaqueMedia) {
+        count += 1;
+        sizeBytes += info.size;
+      }
+    } catch { /* ignore transient cache files */ }
+  }
+  return { count, sizeBytes };
+}
+
+export function getVideoCacheSummary(): Promise<{ count: number; sizeBytes: number }> {
+  const cacheRoot = FileSystem.cacheDirectory;
+  return cacheRoot ? scanMediaDirectory(cacheRoot) : Promise.resolve({ count: 0, sizeBytes: 0 });
+}

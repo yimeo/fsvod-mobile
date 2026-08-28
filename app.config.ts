@@ -40,8 +40,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  owner: "yimeos-team",
-  version: "1.1.0",
+  version: "1.2.5",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,
@@ -55,6 +54,7 @@ const config: ExpoConfig = {
       }
   },
   android: {
+    versionCode: 18,
     adaptiveIcon: {
       backgroundColor: "#0B1020",
       foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -102,7 +102,7 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/splash-icon.png",
+        image: "./assets/images/icon.png",
         imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: "#0B1020",
@@ -117,6 +117,7 @@ const config: ExpoConfig = {
         android: {
           buildArchs: ["armeabi-v7a", "arm64-v8a"],
           minSdkVersion: 24,
+          usesCleartextTraffic: true,
         },
       },
     ],
@@ -124,6 +125,11 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
+  },
+  extra: {
+    eas: {
+      projectId: "43f3a4c6-64c3-496c-b13c-823baad2cbd8",
+    },
   },
 };
 

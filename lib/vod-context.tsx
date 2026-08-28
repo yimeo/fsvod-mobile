@@ -18,7 +18,7 @@ interface VodContextValue {
   isBooting: boolean;
   sourceError: string | null;
   configureSource: (address: string, displayName?: string) => Promise<MacCmsEndpoint>;
-  switchSource: (id: string) => Promise<void>;
+  switchSource: (id: string) => Promise<boolean>;
   deleteSource: (id: string) => Promise<void>;
   checkSource: (id: string) => Promise<void>;
   renameSource: (id: string, displayName: string) => Promise<void>;
@@ -42,7 +42,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<MacCmsCategory[]>([]);
   const [isBooting, setIsBooting] = useState(true);
   const [sourceError, setSourceError] = useState<string | null>(null);
-  const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, configEndpoints: ["https://api1.066821.xyz/api.json", "https://api2.066821.xyz/api.json"], lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
+  const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, configEndpoints: ["https://api.075700.xyz/api.json", "http://api.07571800.xyz/api.json"], lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
 
   const syncOfficialResources = useCallback(async (force = false): Promise<OfficialResourceSyncResult> => {
     const result = await syncOfficialResourceCatalog(force);
@@ -165,21 +165,22 @@ export function VodProvider({ children }: { children: ReactNode }) {
     }
   }, [sources]);
 
-  const switchSource = useCallback(async (id: string) => {
+  const switchSource = useCallback(async (id: string): Promise<boolean> => {
     const source = sources.find((item) => item.id === id);
-    if (!source) return;
-    await saveEndpoint(source.endpoint);
-    setEndpoint(source.endpoint);
+    if (!source) return false;
     try {
       const page = await fetchVodPage(source.endpoint, { page: 1 });
+      await saveEndpoint(source.endpoint);
+      setEndpoint(source.endpoint);
       setCategories(buildCategoryTree([page.raw], page.items));
       setSourceError(null);
       setSources(await updateSourceHealth(id, "healthy"));
+      return true;
     } catch (error) {
-      setCategories([]);
       const message = toChineseNetworkError(error, "数据源连接失败，请稍后重试");
       setSourceError(message);
       setSources(await updateSourceHealth(id, "unhealthy", message));
+      return false;
     }
   }, [sources]);
 
