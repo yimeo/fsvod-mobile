@@ -174,3 +174,5 @@
 - [ ] 排查 Expo 构建流程未使用 yimeos-team 团队额度的问题
 - [x] 编写飞鸿影院 Android 本地构建、安装与签名准备说明
 - [x] 将本地构建指南和 Expo 团队归属配置同步推送至 GitHub 仓库 yimeo/fsvod-mobile
+- [x] 快速切换资源弹窗显示当前使用标识和明确的连接状态文案
+- [x] 补充 GitHub README，说明功能、运行方式与本地 Android 构建
