@@ -38,7 +38,7 @@ export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProp
               const active = isActive(item);
               const switching = switchingId === item.id;
               const healthLabel = item.health === "healthy" ? "连接正常" : item.health === "unhealthy" ? "连接异常" : "待检测";
-              return <Pressable disabled={active || Boolean(switchingId)} onPress={() => void selectSource(item)} style={({ pressed }) => [styles.sourceOption, active && styles.sourceOptionActive, (pressed || switching) && styles.triggerPressed]}><View style={[styles.statusDot, item.health === "healthy" && styles.statusDotHealthy, item.health === "unhealthy" && styles.statusDotUnhealthy]} /><View style={styles.optionCopy}><Text numberOfLines={1} style={styles.optionName}>{item.displayName?.trim() || item.endpoint.inputDomain || "未命名数据源"}</Text><Text numberOfLines={1} style={[styles.optionStatus, item.health === "unhealthy" && styles.optionStatusUnhealthy]}>{active ? "当前使用" : healthLabel}</Text></View>{switching ? <ActivityIndicator size="small" color="#FFB84D" /> : active ? <Text style={styles.currentLabel}>当前</Text> : <Text style={styles.chooseLabel}>选择</Text>}</Pressable>;
+              return <Pressable disabled={active || Boolean(switchingId)} onPress={() => void selectSource(item)} style={({ pressed }) => [styles.sourceOption, active && styles.sourceOptionActive, (pressed || switching) && styles.triggerPressed]}><View style={[styles.statusDot, item.health === "healthy" && styles.statusDotHealthy, item.health === "unhealthy" && styles.statusDotUnhealthy]} /><View style={styles.optionCopy}><View style={styles.optionNameRow}><Text numberOfLines={1} style={styles.optionName}>{item.displayName?.trim() || item.endpoint.inputDomain || "未命名数据源"}</Text>{item.sourceType === "official" ? <Text style={styles.officialTag}>官方</Text> : null}</View><Text numberOfLines={1} style={[styles.optionStatus, item.health === "unhealthy" && styles.optionStatusUnhealthy]}>{active ? "当前使用" : healthLabel}</Text></View>{switching ? <ActivityIndicator size="small" color="#FFB84D" /> : active ? <Text style={styles.currentLabel}>当前</Text> : <Text style={styles.chooseLabel}>选择</Text>}</Pressable>;
             }} />
           </View>
         </View>
@@ -63,7 +63,9 @@ const styles = StyleSheet.create({
   statusDotHealthy: { backgroundColor: "#78D3A4" },
   statusDotUnhealthy: { backgroundColor: "#F39A79" },
   optionCopy: { flex: 1, minWidth: 0 },
-  optionName: { color: "#F0F4F9", fontSize: 14, lineHeight: 20, fontWeight: "900" },
+  optionNameRow: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0 },
+  optionName: { color: "#F0F4F9", fontSize: 14, lineHeight: 20, fontWeight: "900", flexShrink: 1 },
+  officialTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, flexShrink: 0 },
   optionStatus: { color: "#9EB3C9", fontSize: 10, lineHeight: 15, marginTop: 2 },
   optionStatusUnhealthy: { color: "#F0AB91" },
   currentLabel: { color: "#A7E5C0", fontSize: 11, lineHeight: 16, fontWeight: "900" },

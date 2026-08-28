@@ -44,30 +44,49 @@ export default function PlayerScreen() {
   const playlist = useMemo(() => parsePlaylist(getParam(params.playlist)), [params.playlist]);
   const parsedSources = useMemo(() => parsePlaySources(getParam(params.playSources)), [params.playSources]);
   const playSources = useMemo(() => parsedSources.length ? parsedSources : source ? [{ name: source, episodes: playlist }] : [], [parsedSources, playlist, source]);
-  const [offlineUri, setOfflineUri] = useState<string | null>(offline ? url : null);
+  const [offlineResolution, setOfflineResolution] = useState({ episodeUrl: offline ? episodeUrl : "", uri: offline ? url : null, resolved: offline });
   const [offlineUrls, setOfflineUrls] = useState<Set<string>>(() => new Set());
   const [offlineSizes, setOfflineSizes] = useState<Map<string, number>>(() => new Map());
-  const [isOfflineResolved, setIsOfflineResolved] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const preferredIndex = Number.parseInt(getParam(params.episodeIndex), 10);
   const currentIndex = useMemo(() => {
     const rawUrlIndex = playlist.findIndex((item) => item.url === episodeUrl || item.url === url);
     return rawUrlIndex >= 0 ? rawUrlIndex : Number.isInteger(preferredIndex) && preferredIndex >= 0 && preferredIndex < playlist.length ? preferredIndex : -1;
   }, [episodeUrl, playlist, preferredIndex, url]);
-  const playbackUrl = isOfflineResolved ? offlineUri ?? url : "";
+  const isOfflineResolved = offlineResolution.resolved && offlineResolution.episodeUrl === episodeUrl;
+  const offlineUri = isOfflineResolved ? offlineResolution.uri : null;
+  const playbackUrl = offline ? url : isOfflineResolved ? offlineUri ?? url : "";
   const isUsingOffline = Boolean(offlineUri);
   const directPlayable = Boolean(playbackUrl && isDirectVideoUrl(playbackUrl));
   const player = useVideoPlayer(null);
   const lastSavedPosition = useRef(0);
+  const isChangingPlayback = useRef(false);
+  const isReturningToDetail = useRef(false);
   const resumePositionValue = Number(getParam(params.resumePosition, "0"));
   const resumePosition = Number.isFinite(resumePositionValue) && resumePositionValue > 3 ? resumePositionValue : 0;
+
+  const safelyReadPlayerTime = useCallback(() => {
+    try {
+      const value = player.currentTime;
+      return Number.isFinite(value) ? value : 0;
+    } catch {
+      return 0;
+    }
+  }, [player]);
+
+  const safelyPausePlayer = useCallback(() => {
+    try { player.pause(); } catch { /* Native player may already be detaching during a route change. */ }
+  }, [player]);
 
   const persistProgress = useCallback((positionSeconds: number) => {
     if (!vodId || !episodeUrl || !Number.isFinite(positionSeconds)) return;
     const safePosition = Math.max(0, Math.floor(positionSeconds));
     if (safePosition > 0 && Math.abs(safePosition - lastSavedPosition.current) < 4) return;
     lastSavedPosition.current = safePosition;
-    void saveWatchHistory({ id: vodId, name: title, posterUrl, sourceName: source, episodeName: episode || "影视内容", episodeUrl, episodeIndex: currentIndex >= 0 ? currentIndex : 0, playlist, playSources, positionSeconds: safePosition, durationSeconds: Number.isFinite(player.duration) ? player.duration : undefined, watchedAt: new Date().toISOString() });
-  }, [currentIndex, episode, episodeUrl, playSources, player.duration, playlist, posterUrl, source, title, vodId]);
+    let durationSeconds: number | undefined;
+    try { durationSeconds = Number.isFinite(player.duration) ? player.duration : undefined; } catch { durationSeconds = undefined; }
+    void saveWatchHistory({ id: vodId, name: title, posterUrl, sourceName: source, episodeName: episode || "影视内容", episodeUrl, episodeIndex: currentIndex >= 0 ? currentIndex : 0, playlist, playSources, positionSeconds: safePosition, durationSeconds, watchedAt: new Date().toISOString() });
+  }, [currentIndex, episode, episodeUrl, playSources, player, playlist, posterUrl, source, title, vodId]);
 
   useEffect(() => {
     lastSavedPosition.current = 0;
@@ -75,41 +94,47 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     let mounted = true;
-    setIsOfflineResolved(false);
+    setOfflineResolution({ episodeUrl, uri: offline ? url : null, resolved: false });
     void Promise.all([getOfflineDownload(episodeUrl), getOfflineDownloads()]).then(([current, downloads]) => {
       if (!mounted) return;
-      setOfflineUri(current?.localUri ?? (offline ? url : null));
+      setOfflineResolution({ episodeUrl, uri: current?.localUri ?? (offline ? url : null), resolved: true });
       setOfflineUrls(new Set(downloads.map((item) => item.remoteUrl)));
       setOfflineSizes(new Map(downloads.map((item) => [item.remoteUrl, item.sizeBytes])));
-      setIsOfflineResolved(true);
     });
     return () => { mounted = false; };
   }, [episodeUrl, offline, url]);
 
   useEffect(() => {
-    if (!directPlayable) { player.pause(); return; }
+    if (!directPlayable) { safelyPausePlayer(); return; }
     let active = true;
-    void player.replaceAsync({ uri: playbackUrl, useCaching: Platform.OS === "android" }).then(() => {
-      if (!active) return;
-      if (resumePosition > 0) player.currentTime = resumePosition;
-      player.play();
-    });
-    return () => { active = false; player.pause(); };
-  }, [directPlayable, playbackUrl, player, resumePosition]);
+    setPlaybackError(null);
+    safelyPausePlayer();
+    void (async () => {
+      try {
+        await player.replaceAsync({ uri: playbackUrl, useCaching: Platform.OS === "android" });
+        if (!active || isReturningToDetail.current) return;
+        if (resumePosition > 0) player.currentTime = resumePosition;
+        player.play();
+      } catch {
+        if (active && !isReturningToDetail.current) setPlaybackError("当前线路暂时无法播放，请切换播放源后重试。");
+      }
+    })();
+    return () => { active = false; safelyPausePlayer(); };
+  }, [directPlayable, playbackUrl, player, resumePosition, safelyPausePlayer]);
 
   useEffect(() => {
     if (!directPlayable) return;
     player.timeUpdateEventInterval = 5;
     const subscription = player.addListener("timeUpdate", ({ currentTime }) => persistProgress(currentTime));
-    return () => { subscription.remove(); persistProgress(player.currentTime); };
-  }, [directPlayable, persistProgress, player]);
+    return () => { subscription.remove(); persistProgress(safelyReadPlayerTime()); };
+  }, [directPlayable, persistProgress, player, safelyReadPlayerTime]);
 
   useFocusEffect(useCallback(() => {
     return () => {
-      persistProgress(player.currentTime);
-      player.pause();
+      persistProgress(safelyReadPlayerTime());
+      safelyPausePlayer();
     };
-  }, [persistProgress, player]));
+  }, [persistProgress, safelyPausePlayer, safelyReadPlayerTime]));
 
   const openExternal = async () => {
     if (!url) return;
@@ -117,21 +142,29 @@ export default function PlayerScreen() {
   };
 
   const returnToDetail = useCallback(() => {
-    persistProgress(player.currentTime);
-    player.pause();
-    if (vodId) {
-      router.replace({ pathname: "/vod/[id]", params: { id: vodId } } as never);
-      return;
-    }
-    router.back();
-  }, [persistProgress, player, router, vodId]);
+    if (isReturningToDetail.current) return;
+    isReturningToDetail.current = true;
+    persistProgress(safelyReadPlayerTime());
+    safelyPausePlayer();
+    requestAnimationFrame(() => {
+      if (vodId) router.replace({ pathname: "/vod/[id]", params: { id: vodId } } as never);
+      else router.back();
+    });
+  }, [persistProgress, router, safelyPausePlayer, safelyReadPlayerTime, vodId]);
 
   const openEpisode = useCallback(async (targetSource: MacCmsPlaySource, index: number) => {
+    if (isChangingPlayback.current || isReturningToDetail.current) return;
     const next = targetSource.episodes[index];
     if (!next) return;
-    const downloaded = await getOfflineDownload(next.url);
-    router.replace({ pathname: "/player", params: { url: downloaded?.localUri ?? next.url, episodeUrl: next.url, title, episode: next.name, source: targetSource.name, offline: downloaded ? "1" : "0", episodeIndex: String(index), playlist: JSON.stringify(targetSource.episodes), playSources: JSON.stringify(playSources), vodId, ...(posterUrl ? { posterUrl } : {}) } } as never);
-  }, [playSources, posterUrl, router, title, vodId]);
+    isChangingPlayback.current = true;
+    safelyPausePlayer();
+    try {
+      const downloaded = await getOfflineDownload(next.url);
+      router.setParams({ url: downloaded?.localUri ?? next.url, episodeUrl: next.url, episode: next.name, source: targetSource.name, offline: downloaded ? "1" : "0", episodeIndex: String(index), playlist: JSON.stringify(targetSource.episodes) } as never);
+    } finally {
+      requestAnimationFrame(() => { isChangingPlayback.current = false; });
+    }
+  }, [router, safelyPausePlayer]);
 
   const playEpisodeAt = (index: number) => {
     const currentSource = playSources.find((item) => item.name === source) ?? { name: source, episodes: playlist };
@@ -146,13 +179,13 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!directPlayable || currentIndex < 0 || currentIndex >= playlist.length - 1) return;
-    const subscription = player.addListener("playToEnd", () => playEpisodeAt(currentIndex + 1));
+    const subscription = player.addListener("playToEnd", () => { if (!isChangingPlayback.current && !isReturningToDetail.current) playEpisodeAt(currentIndex + 1); });
     return () => subscription.remove();
   }, [currentIndex, directPlayable, player, playlist.length, source, title]);
 
   if (!url) return <View style={styles.page}><ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>播放地址无效</Text><Pressable onPress={returnToDetail} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回详情</Text></Pressable></ScreenContainer><GlobalBottomNavigation /></View>;
 
-  return <View style={styles.page}><ScreenContainer containerClassName="bg-background" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={styles.header}><Pressable onPress={returnToDetail} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹ 返回</Text></Pressable><View style={styles.headerInfo}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.episode}>{episode || "正在播放"}{source ? ` · ${source}` : ""}</Text></View></View>{directPlayable ? <View style={styles.playerWrap}><VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" /><View style={styles.statusRow}><Text style={isUsingOffline ? styles.offlineBadge : styles.networkBadge}>{isUsingOffline ? "离线播放" : "网络播放"}</Text><Text style={styles.statusText}>{isUsingOffline ? `正在使用本机已下载文件播放，无需网络。${resumePosition > 0 ? ` 已从 ${formatDuration(resumePosition)} 继续播放。` : ""}${currentIndex >= 0 && currentIndex < playlist.length - 1 ? " 播放结束后将自动进入下一集。" : ""}` : "正在播放网络媒体；若不能播放，请尝试切换播放源。"}</Text></View></View> : <View style={styles.unsupported}><Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text><Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以切换播放源、切换剧集，或在浏览器中打开。</Text><Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}><Text style={styles.externalText}>在浏览器打开</Text></Pressable></View>}{playSources.length ? <View style={styles.sourcePanel}><Text style={styles.sourceTitle}>选择播放源</Text><Text style={styles.sourceHint}>选择线路后可直接切换播放。</Text><View style={styles.sourceList}>{playSources.map((item) => { const downloadedCount = item.episodes.filter((entry) => offlineUrls.has(entry.url)).length; return <Pressable key={item.name} onPress={() => switchSource(item)} style={({ pressed }) => [styles.sourceChip, item.name === source && styles.sourceChipActive, pressed && styles.pressed]}><Text style={[styles.sourceChipText, item.name === source && styles.sourceChipTextActive]}>{item.name}{downloadedCount ? ` · ${downloadedCount} 已下载` : ""}</Text></Pressable>; })}</View></View> : null}{playlist.length ? <View style={styles.playlistPanel}><View style={styles.episodeHeading}><View><Text style={styles.playlistTitle}>播放列表</Text><Text style={styles.playlistMeta}>{source || "当前线路"} · {playlist.length} 集 · 当前第 {currentIndex >= 0 ? currentIndex + 1 : 1} 集</Text></View><View style={styles.switchActions}><Pressable disabled={currentIndex <= 0} onPress={() => playEpisodeAt(currentIndex - 1)} style={({ pressed }) => [styles.switchButton, currentIndex <= 0 && styles.switchDisabled, pressed && styles.pressed]}><Text style={styles.switchText}>上一集</Text></Pressable><Pressable disabled={currentIndex < 0 || currentIndex >= playlist.length - 1} onPress={() => playEpisodeAt(currentIndex + 1)} style={({ pressed }) => [styles.switchButton, currentIndex < 0 || currentIndex >= playlist.length - 1 ? styles.switchDisabled : styles.switchPrimary, pressed && styles.pressed]}><Text style={[styles.switchText, currentIndex >= 0 && currentIndex < playlist.length - 1 && styles.switchPrimaryText]}>下一集</Text></Pressable></View></View><FlatList data={playlist} key="playlist-grid" numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.url}-${index}`} contentContainerStyle={styles.playlistList} columnWrapperStyle={playlist.length ? styles.playlistRow : undefined} renderItem={({ item, index }) => { const downloaded = offlineUrls.has(item.url); const size = offlineSizes.get(item.url); return <Pressable onPress={() => playEpisodeAt(index)} style={({ pressed }) => [styles.playlistItem, downloaded && styles.playlistItemDownloaded, index === currentIndex && styles.playlistItemActive, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.playlistItemText, index === currentIndex && styles.playlistItemTextActive]}>{item.name}</Text>{downloaded ? <Text style={[styles.downloadedTag, index === currentIndex && styles.downloadedTagActive]}>已下载 · {formatFileSize(size ?? 0)}</Text> : null}</Pressable>; }} /></View> : null}</ScrollView></ScreenContainer><GlobalBottomNavigation /></View>;
+  return <View style={styles.page}><ScreenContainer containerClassName="bg-background" edges={["top", "bottom", "left", "right"]}><ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={styles.header}><Pressable onPress={returnToDetail} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹ 返回</Text></Pressable><View style={styles.headerInfo}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.episode}>{episode || "正在播放"}{source ? ` · ${source}` : ""}</Text></View></View>{directPlayable ? <View style={styles.playerWrap}><VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" /><View style={styles.statusRow}><Text style={isUsingOffline ? styles.offlineBadge : styles.networkBadge}>{isUsingOffline ? "离线播放" : "网络播放"}</Text><Text style={styles.statusText}>{isUsingOffline ? `正在使用本机已下载文件播放，无需网络。${resumePosition > 0 ? ` 已从 ${formatDuration(resumePosition)} 继续播放。` : ""}${currentIndex >= 0 && currentIndex < playlist.length - 1 ? " 播放结束后将自动进入下一集。" : ""}` : "正在播放网络媒体；若不能播放，请尝试切换播放源。"}</Text></View>{playbackError ? <Text style={styles.playbackError}>{playbackError}</Text> : null}</View> : <View style={styles.unsupported}><Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text><Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以切换播放源、切换剧集，或在浏览器中打开。</Text><Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}><Text style={styles.externalText}>在浏览器打开</Text></Pressable></View>}{playSources.length ? <View style={styles.sourcePanel}><Text style={styles.sourceTitle}>选择播放源</Text><Text style={styles.sourceHint}>选择线路后可直接切换播放。</Text><View style={styles.sourceList}>{playSources.map((item) => { const downloadedCount = item.episodes.filter((entry) => offlineUrls.has(entry.url)).length; return <Pressable key={item.name} onPress={() => switchSource(item)} style={({ pressed }) => [styles.sourceChip, item.name === source && styles.sourceChipActive, pressed && styles.pressed]}><Text style={[styles.sourceChipText, item.name === source && styles.sourceChipTextActive]}>{item.name}{downloadedCount ? ` · ${downloadedCount} 已下载` : ""}</Text></Pressable>; })}</View></View> : null}{playlist.length ? <View style={styles.playlistPanel}><View style={styles.episodeHeading}><View><Text style={styles.playlistTitle}>播放列表</Text><Text style={styles.playlistMeta}>{source || "当前线路"} · {playlist.length} 集 · 当前第 {currentIndex >= 0 ? currentIndex + 1 : 1} 集</Text></View><View style={styles.switchActions}><Pressable disabled={currentIndex <= 0} onPress={() => playEpisodeAt(currentIndex - 1)} style={({ pressed }) => [styles.switchButton, currentIndex <= 0 && styles.switchDisabled, pressed && styles.pressed]}><Text style={styles.switchText}>上一集</Text></Pressable><Pressable disabled={currentIndex < 0 || currentIndex >= playlist.length - 1} onPress={() => playEpisodeAt(currentIndex + 1)} style={({ pressed }) => [styles.switchButton, currentIndex < 0 || currentIndex >= playlist.length - 1 ? styles.switchDisabled : styles.switchPrimary, pressed && styles.pressed]}><Text style={[styles.switchText, currentIndex >= 0 && currentIndex < playlist.length - 1 && styles.switchPrimaryText]}>下一集</Text></Pressable></View></View><FlatList data={playlist} key="playlist-grid" numColumns={4} scrollEnabled={false} keyExtractor={(item, index) => `${item.url}-${index}`} contentContainerStyle={styles.playlistList} columnWrapperStyle={playlist.length ? styles.playlistRow : undefined} renderItem={({ item, index }) => { const downloaded = offlineUrls.has(item.url); const size = offlineSizes.get(item.url); return <Pressable onPress={() => playEpisodeAt(index)} style={({ pressed }) => [styles.playlistItem, downloaded && styles.playlistItemDownloaded, index === currentIndex && styles.playlistItemActive, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.playlistItemText, index === currentIndex && styles.playlistItemTextActive]}>{item.name}</Text>{downloaded ? <Text style={[styles.downloadedTag, index === currentIndex && styles.downloadedTagActive]}>已下载 · {formatFileSize(size ?? 0)}</Text> : null}</Pressable>; }} /></View> : null}</ScrollView></ScreenContainer><GlobalBottomNavigation /></View>;
 }
 
 function formatDuration(seconds: number): string {
@@ -180,6 +213,7 @@ const styles = StyleSheet.create({
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#050812" },
   statusRow: { flexDirection: "row", gap: 8, alignItems: "center", paddingHorizontal: 18, paddingTop: 11 },
   statusText: { color: "#8796B0", fontSize: 12, lineHeight: 18, flex: 1 },
+  playbackError: { color: "#F4B490", fontSize: 11, lineHeight: 17, marginHorizontal: 18, marginTop: 9 },
   offlineBadge: { color: "#A9E2BE", fontSize: 11, lineHeight: 17, fontWeight: "800", backgroundColor: "#1F523F", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   networkBadge: { color: "#B9C8DB", fontSize: 11, lineHeight: 17, fontWeight: "800", backgroundColor: "#27344B", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   sourcePanel: { marginHorizontal: 18, marginTop: 22 },

@@ -3,6 +3,8 @@ import { Image } from "expo-image";
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { useEffect, useState } from "react";
 
+import { recordPosterCache } from "@/lib/poster-cache";
+
 interface VodPosterProps {
   title: string;
   url: string | null;
@@ -42,8 +44,8 @@ export function VodPoster({ title, url, thumbnailUrl, style }: VodPosterProps) {
   if ((url && !fullFailed) || (useThumbnail && thumbnailUrl)) {
     return (
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
-        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" placeholder={{ blurhash: BLUR_HASH }} placeholderContentFit="cover" recyclingKey={`thumb-${thumbnailUrl}`} onLoad={() => setThumbnailLoaded(true)} onError={() => setThumbnailFailed(true)} /> : null}
-        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="disk" transition={260} recyclingKey={`full-${url}`} onLoad={() => setFullLoaded(true)} onError={() => setFullFailed(true)} /> : null}
+        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" placeholder={{ blurhash: BLUR_HASH }} placeholderContentFit="cover" recyclingKey={`thumb-${thumbnailUrl}`} onLoad={() => { setThumbnailLoaded(true); recordPosterCache(thumbnailUrl); }} onError={() => setThumbnailFailed(true)} /> : null}
+        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="disk" transition={260} recyclingKey={`full-${url}`} onLoad={() => { setFullLoaded(true); recordPosterCache(url); }} onError={() => setFullFailed(true)} /> : null}
       </View>
     );
   }
