@@ -167,4 +167,4 @@
 - [x] 快速切换资源列表中的官方数据源显示“官方”标志
 - [x] 在“我的”页底部显示版本信息 fsvod-mobile-1.1.0
 - [x] 修复所有 Android 版本中未开始播放时切换线路或返回详情的闪退
-- [ ] 将跨 Android 播放器稳定性修复推送至 GitHub 仓库 yimeo/fsvod-mobile
+- [x] 将跨 Android 播放器稳定性修复推送至 GitHub 仓库 yimeo/fsvod-mobile
