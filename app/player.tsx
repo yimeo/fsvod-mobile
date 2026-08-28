@@ -8,6 +8,7 @@ import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { ScreenContainer } from "@/components/screen-container";
 import { isDirectVideoUrl, type MacCmsPlaySource } from "@/lib/maccms";
 import { getOfflineDownload, getOfflineDownloads } from "@/lib/offline-downloads";
+import { getSafePlaybackDuration, getSafePlaybackPosition, pauseIfLoaded } from "@/lib/player-safety";
 import { saveWatchHistory } from "@/lib/vod-storage";
 
 interface PlaylistEpisode { name: string; url: string; }
@@ -60,22 +61,18 @@ export default function PlayerScreen() {
   const directPlayable = Boolean(playbackUrl && isDirectVideoUrl(playbackUrl));
   const player = useVideoPlayer(null);
   const lastSavedPosition = useRef(0);
+  const playerHasLoadedSource = useRef(false);
   const isChangingPlayback = useRef(false);
   const isReturningToDetail = useRef(false);
   const resumePositionValue = Number(getParam(params.resumePosition, "0"));
   const resumePosition = Number.isFinite(resumePositionValue) && resumePositionValue > 3 ? resumePositionValue : 0;
 
   const safelyReadPlayerTime = useCallback(() => {
-    try {
-      const value = player.currentTime;
-      return Number.isFinite(value) ? value : 0;
-    } catch {
-      return 0;
-    }
+    return getSafePlaybackPosition(player, playerHasLoadedSource.current);
   }, [player]);
 
   const safelyPausePlayer = useCallback(() => {
-    try { player.pause(); } catch { /* Native player may already be detaching during a route change. */ }
+    pauseIfLoaded(player, playerHasLoadedSource.current);
   }, [player]);
 
   const persistProgress = useCallback((positionSeconds: number) => {
@@ -83,8 +80,7 @@ export default function PlayerScreen() {
     const safePosition = Math.max(0, Math.floor(positionSeconds));
     if (safePosition > 0 && Math.abs(safePosition - lastSavedPosition.current) < 4) return;
     lastSavedPosition.current = safePosition;
-    let durationSeconds: number | undefined;
-    try { durationSeconds = Number.isFinite(player.duration) ? player.duration : undefined; } catch { durationSeconds = undefined; }
+    const durationSeconds = getSafePlaybackDuration(player, playerHasLoadedSource.current);
     void saveWatchHistory({ id: vodId, name: title, posterUrl, sourceName: source, episodeName: episode || "影视内容", episodeUrl, episodeIndex: currentIndex >= 0 ? currentIndex : 0, playlist, playSources, positionSeconds: safePosition, durationSeconds, watchedAt: new Date().toISOString() });
   }, [currentIndex, episode, episodeUrl, playSources, player, playlist, posterUrl, source, title, vodId]);
 
@@ -105,21 +101,27 @@ export default function PlayerScreen() {
   }, [episodeUrl, offline, url]);
 
   useEffect(() => {
-    if (!directPlayable) { safelyPausePlayer(); return; }
+    if (!directPlayable) {
+      safelyPausePlayer();
+      playerHasLoadedSource.current = false;
+      return;
+    }
     let active = true;
     setPlaybackError(null);
     safelyPausePlayer();
+    playerHasLoadedSource.current = false;
     void (async () => {
       try {
         await player.replaceAsync({ uri: playbackUrl, useCaching: Platform.OS === "android" });
         if (!active || isReturningToDetail.current) return;
+        playerHasLoadedSource.current = true;
         if (resumePosition > 0) player.currentTime = resumePosition;
         player.play();
       } catch {
         if (active && !isReturningToDetail.current) setPlaybackError("当前线路暂时无法播放，请切换播放源后重试。");
       }
     })();
-    return () => { active = false; safelyPausePlayer(); };
+    return () => { active = false; safelyPausePlayer(); playerHasLoadedSource.current = false; };
   }, [directPlayable, playbackUrl, player, resumePosition, safelyPausePlayer]);
 
   useEffect(() => {
