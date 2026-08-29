@@ -17,7 +17,7 @@ const HOME_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
 export default function HomeScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ typeId?: string; sort?: string }>();
-  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision, refreshCategories } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision, preferredCategoryId, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("");
   const [activeTypeId, setActiveTypeId] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "hot">("latest");
@@ -30,16 +30,17 @@ export default function HomeScreen() {
   const [history, setHistory] = useState<WatchHistoryEntry[]>([]);
   const loadRequestId = useRef(0);
 
-  const selectedRoot = useMemo(() => categories.find((category) => category.id === activeRootId) ?? categories[0] ?? EMPTY_CATEGORY, [activeRootId, categories]);
+  const selectedRoot = useMemo(() => categories.find((category) => category.id === activeRootId) ?? categories.find((category) => category.id === preferredCategoryId || category.children.some((child) => child.id === preferredCategoryId)) ?? categories[0] ?? EMPTY_CATEGORY, [activeRootId, categories, preferredCategoryId]);
 
   useEffect(() => { void getWatchHistory().then(setHistory); }, []);
 
   useEffect(() => {
-    if (categories.length && !categories.some((category) => category.id === activeRootId)) {
-      setActiveRootId(categories[0].id);
-      setActiveTypeId(categories[0].id);
+    const preferredRoot = categories.find((category) => category.id === preferredCategoryId || category.children.some((child) => child.id === preferredCategoryId)) ?? categories[0];
+    if (preferredRoot && !categories.some((category) => category.id === activeRootId)) {
+      setActiveRootId(preferredRoot.id);
+      setActiveTypeId(preferredCategoryId || preferredRoot.id);
     }
-  }, [activeRootId, categories]);
+  }, [activeRootId, categories, preferredCategoryId]);
 
   useEffect(() => {
     loadRequestId.current += 1;
@@ -48,8 +49,8 @@ export default function HomeScreen() {
     setPageCount(1);
     setLoadError(null);
     setActiveRootId("");
-    setActiveTypeId("");
-  }, [sourceRevision]);
+    setActiveTypeId(preferredCategoryId);
+  }, [preferredCategoryId, sourceRevision]);
 
   useEffect(() => {
     const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
@@ -127,7 +128,7 @@ export default function HomeScreen() {
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>{items.length ? "网络不可用，正在展示本地已缓存内容。请尝试更换数据源。" : "网络不可用，暂时无法加载内容。请尝试更换数据源。"}</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
     {latestHistory ? <View style={styles.continueSection}><View style={styles.continueHeading}><View><Text style={styles.sectionTitle}>继续观看</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text></View><Pressable onPress={() => router.push("/history" as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View><Pressable onPress={() => void resumeHistory(latestHistory)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text numberOfLines={1} style={styles.continueMeta}>{latestHistory.episodeName || "影视内容"}{latestHistory.positionSeconds ? ` · ${formatDuration(latestHistory.positionSeconds)}` : ""}</Text><View style={styles.continueLine}><View style={[styles.continueProgress, { width: `${continueProgress}%` }]} /></View></View></Pressable></View> : null}
-    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable accessibilityLabel={`查看${selectedRoot.name || "电影"}更多影片`} onPress={() => router.navigate({ pathname: "/categories", params: { rootId: selectedRoot.id } } as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
+    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>{`正在热映${selectedRoot.name || ""}`}</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable accessibilityLabel={`查看${selectedRoot.name || "电影"}更多影片`} onPress={() => router.navigate({ pathname: "/categories", params: { rootId: selectedRoot.id } } as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
     {loadError ? <Text style={styles.loadError}>{loadError}</Text> : null}
   </View>;
 

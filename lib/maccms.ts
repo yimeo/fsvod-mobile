@@ -64,6 +64,7 @@ export interface MacCmsProbeResult {
   page: MacCmsPage;
   categories: MacCmsCategory[];
   itemCount: number;
+  preferredTypeId: string;
 }
 
 type RecordValue = Record<string, unknown>;
@@ -291,7 +292,7 @@ export async function probeMacCmsEndpoint(endpoint: MacCmsEndpoint): Promise<Mac
     throw new Error("接口有响应，但应用实际分类列表无法读取");
   }
   const categories = promotePlayableCategory(buildCategoryTree([payload], initialPage.items), playableTypeId);
-  return { page: displayPage, categories, itemCount: displayPage.items.length };
+  return { page: displayPage, categories, itemCount: displayPage.items.length, preferredTypeId: playableTypeId };
 }
 
 export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog> {

@@ -353,8 +353,9 @@ export async function getPosterCacheSummary(): Promise<{ count: number; bytes: n
     }
   }));
   const cached = resolved.filter((item): item is { url: string; bytes: number } => Boolean(item));
-  const cachedUrls = cached.map((item) => item.url);
-  if (cachedUrls.length !== tracked.length) await AsyncStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(cachedUrls));
+  // Do not prune remembered cache keys merely because expo-image has not exposed a path yet.
+  // Android can complete onLoad before its disk entry is queryable; pruning here caused all poster
+  // counts to be permanently reset to zero on the next settings-page refresh.
   return { count: cached.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
 }
 

@@ -15,7 +15,7 @@ const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, child
 export default function CategoriesScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ rootId?: string }>();
-  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision, preferredCategoryId } = useVodSource();
   const [rootId, setRootId] = useState("");
   const [childId, setChildId] = useState("");
   const [items, setItems] = useState<MacCmsVod[]>([]);
@@ -46,22 +46,23 @@ export default function CategoriesScreen() {
       return;
     }
     if (!requestedRootId) appliedRouteRootId.current = null;
-    if (categories.length && !categories.some((category) => category.id === rootId)) {
-      setRootId(categories[0].id);
-      setChildId(categories[0].id);
+    const preferredRoot = categories.find((category) => category.id === preferredCategoryId || category.children.some((child) => child.id === preferredCategoryId)) ?? categories[0];
+    if (preferredRoot && !categories.some((category) => category.id === rootId)) {
+      setRootId(preferredRoot.id);
+      setChildId(preferredCategoryId || preferredRoot.id);
     }
-  }, [categories, rootId, routeParams.rootId]);
+  }, [categories, preferredCategoryId, rootId, routeParams.rootId]);
 
   useEffect(() => {
     loadRequestId.current += 1;
     appliedRouteRootId.current = null;
     setRootId("");
-    setChildId("");
+    setChildId(preferredCategoryId);
     setItems([]);
     setPage(1);
     setPageCount(1);
     setLoadError(null);
-  }, [sourceRevision]);
+  }, [preferredCategoryId, sourceRevision]);
 
   useFocusEffect(useCallback(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
