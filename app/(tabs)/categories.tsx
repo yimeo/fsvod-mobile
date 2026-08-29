@@ -15,7 +15,7 @@ const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, child
 export default function CategoriesScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ rootId?: string }>();
-  const { endpoint, sources, categories, isBooting, sourceError } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision } = useVodSource();
   const [rootId, setRootId] = useState("");
   const [childId, setChildId] = useState("");
   const [items, setItems] = useState<MacCmsVod[]>([]);
@@ -28,6 +28,7 @@ export default function CategoriesScreen() {
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
   const appliedRouteRootId = useRef<string | null>(null);
+  const loadRequestId = useRef(0);
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
@@ -51,6 +52,17 @@ export default function CategoriesScreen() {
     }
   }, [categories, rootId, routeParams.rootId]);
 
+  useEffect(() => {
+    loadRequestId.current += 1;
+    appliedRouteRootId.current = null;
+    setRootId("");
+    setChildId("");
+    setItems([]);
+    setPage(1);
+    setPageCount(1);
+    setLoadError(null);
+  }, [sourceRevision]);
+
   useFocusEffect(useCallback(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
       setPageMode(mode);
@@ -60,6 +72,7 @@ export default function CategoriesScreen() {
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedTypeId) return;
+    const requestId = ++loadRequestId.current;
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -68,14 +81,15 @@ export default function CategoriesScreen() {
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([root, ...root.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: category.id }))))
         : await fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: selectedTypeId });
+      if (requestId !== loadRequestId.current) return;
       const pageItems = result.items.slice(0, pageSize);
       setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "分类内容加载失败");
+      if (requestId === loadRequestId.current) setLoadError(error instanceof Error ? error.message : "分类内容加载失败");
     } finally {
-      setIsLoading(false);
+      if (requestId === loadRequestId.current) setIsLoading(false);
     }
   }, [classicPageSize, endpoint, pageMode, root, selectedTypeId]);
 

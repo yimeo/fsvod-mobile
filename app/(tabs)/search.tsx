@@ -1,7 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
@@ -11,7 +11,7 @@ import { useVodSource } from "@/lib/vod-context";
 
 export default function SearchScreen() {
   const router = useRouter();
-  const { endpoint } = useVodSource();
+  const { endpoint, sourceRevision } = useVodSource();
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [items, setItems] = useState<MacCmsVod[]>([]);
@@ -22,6 +22,7 @@ export default function SearchScreen() {
   const [pageMode, setPageMode] = useState<CategoryPageMode>("auto");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
+  const loadRequestId = useRef(0);
 
   useFocusEffect(useCallback(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
@@ -32,21 +33,33 @@ export default function SearchScreen() {
 
   const loadPage = useCallback(async (keyword: string, requestedPage: number, append = false) => {
     if (!keyword || !endpoint) return;
+    const requestId = ++loadRequestId.current;
     setIsLoading(true);
     setError(null);
     try {
       const pageSize = pageMode === "classic" ? classicPageSize : DEFAULT_LIST_PAGE_SIZE;
       const result = await fetchVodPage(endpoint, { page: requestedPage, pageSize, keyword });
+      if (requestId !== loadRequestId.current) return;
       const pageItems = result.items.slice(0, pageSize);
       setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "搜索失败");
+      if (requestId === loadRequestId.current) setError(searchError instanceof Error ? searchError.message : "搜索失败");
     } finally {
-      setIsLoading(false);
+      if (requestId === loadRequestId.current) setIsLoading(false);
     }
   }, [classicPageSize, endpoint, pageMode]);
+
+  useEffect(() => {
+    loadRequestId.current += 1;
+    setItems([]);
+    setPage(1);
+    setPageCount(1);
+    setError(null);
+    const keyword = submittedQuery.trim();
+    if (keyword && endpoint) void loadPage(keyword, 1);
+  }, [sourceRevision]);
 
   const search = useCallback(async (rawValue?: string) => {
     const keyword = (rawValue ?? query).trim();

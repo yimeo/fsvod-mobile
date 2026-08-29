@@ -266,14 +266,32 @@ export function buildCategoryTree(payloads: unknown[], fallbackItems: MacCmsVod[
   return roots;
 }
 
+function categoryContainsType(category: MacCmsCategory, typeId: string): boolean {
+  return category.id === typeId || category.children.some((child) => categoryContainsType(child, typeId));
+}
+
+function promotePlayableCategory(categories: MacCmsCategory[], typeId: string): MacCmsCategory[] {
+  const playableIndex = categories.findIndex((category) => categoryContainsType(category, typeId));
+  if (playableIndex <= 0) return categories;
+  return [categories[playableIndex], ...categories.slice(0, playableIndex), ...categories.slice(playableIndex + 1)];
+}
+
 export async function probeMacCmsEndpoint(endpoint: MacCmsEndpoint): Promise<MacCmsProbeResult> {
   const payload = await getJson(addQuery(endpoint.apiUrl, { ac: "list", pg: 1, pagesize: 20 }));
-  const page = parseMacCmsPage(payload, endpoint.apiUrl);
-  if (page.items.length === 0) {
+  const initialPage = parseMacCmsPage(payload, endpoint.apiUrl);
+  if (initialPage.items.length === 0) {
     throw new Error("接口可以访问，但没有返回有效影视数据");
   }
-  const categories = buildCategoryTree([payload], page.items);
-  return { page, categories, itemCount: page.items.length };
+  const playableTypeId = initialPage.items.find((item) => Boolean(item.typeId))?.typeId;
+  if (!playableTypeId) throw new Error("接口返回的影视数据缺少可浏览分类");
+
+  // Validate the same category request the home screen will issue, not only the unfiltered API response.
+  const displayPage = await fetchVodPage(endpoint, { page: 1, pageSize: 20, typeId: playableTypeId, sort: "latest" });
+  if (displayPage.items.length === 0) {
+    throw new Error("接口有响应，但应用实际分类列表无法读取");
+  }
+  const categories = promotePlayableCategory(buildCategoryTree([payload], initialPage.items), playableTypeId);
+  return { page: displayPage, categories, itemCount: displayPage.items.length };
 }
 
 export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog> {

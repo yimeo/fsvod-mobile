@@ -18,6 +18,7 @@ interface VodContextValue {
   categories: MacCmsCategory[];
   isBooting: boolean;
   sourceError: string | null;
+  sourceRevision: number;
   configureSource: (address: string, displayName?: string) => Promise<MacCmsEndpoint>;
   switchSource: (id: string) => Promise<boolean>;
   deleteSource: (id: string) => Promise<void>;
@@ -43,6 +44,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<MacCmsCategory[]>([]);
   const [isBooting, setIsBooting] = useState(true);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [sourceRevision, setSourceRevision] = useState(0);
   const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, configEndpoints: ["https://api1.066821.xyz/api.json", "https://api2.066821.xyz/api.json"], lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
 
   const syncOfficialResources = useCallback(async (force = false): Promise<OfficialResourceSyncResult> => {
@@ -73,6 +75,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
           const page = probe.page;
           setCategories(probe.categories);
           setSourceError(null);
+          setSourceRevision((revision) => revision + 1);
           nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "healthy", null, page.items.length);
         } catch (error) {
           const message = toChineseNetworkError(error, "更新后的官方数据源暂不可用，请稍后重试");
@@ -88,8 +91,8 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const refreshCategories = useCallback(async () => {
     if (!endpoint) return;
     try {
-      const page = await fetchVodPage(endpoint, { page: 1 });
-      setCategories(buildCategoryTree([page.raw], page.items));
+      const probe = await probeMacCmsEndpoint(endpoint);
+      setCategories(probe.categories);
       setSourceError(null);
     } catch (error) {
       setSourceError(toChineseNetworkError(error, "数据源连接失败，请稍后重试"));
@@ -125,8 +128,8 @@ export function VodProvider({ children }: { children: ReactNode }) {
       if (savedEndpoint) {
         setEndpoint(savedEndpoint);
         try {
-          const page = await fetchVodPage(savedEndpoint, { page: 1 });
-          setCategories(buildCategoryTree([page.raw], page.items));
+          const probe = await probeMacCmsEndpoint(savedEndpoint);
+          setCategories(probe.categories);
         } catch (error) {
           setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
         }
@@ -159,6 +162,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
     setEndpoint(catalog.endpoint);
     setCategories(catalog.categories);
     setSourceError(null);
+    setSourceRevision((revision) => revision + 1);
     return catalog.endpoint;
   }, []);
 
@@ -183,6 +187,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setEndpoint(source.endpoint);
       setCategories(probe.categories);
       setSourceError(null);
+      setSourceRevision((revision) => revision + 1);
       setSources(await updateSourceHealth(id, "healthy", null, page.items.length));
       return true;
     } catch (error) {
@@ -202,14 +207,17 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setEndpoint(null);
       setCategories([]);
       setSourceError(null);
+      setSourceRevision((revision) => revision + 1);
       await clearEndpoint();
       return;
     }
     await saveEndpoint(fallback.endpoint);
     setEndpoint(fallback.endpoint);
     try {
-      const page = await fetchVodPage(fallback.endpoint, { page: 1 });
-      setCategories(buildCategoryTree([page.raw], page.items));
+      const probe = await probeMacCmsEndpoint(fallback.endpoint);
+      setCategories(probe.categories);
+      setSourceError(null);
+      setSourceRevision((revision) => revision + 1);
     } catch (error) {
       setCategories([]);
       setSourceError(toChineseNetworkError(error, "备用数据源连接失败，请稍后重试"));
@@ -232,6 +240,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
     setEndpoint(catalog.endpoint);
     setCategories(catalog.categories);
     setSourceError(null);
+    setSourceRevision((revision) => revision + 1);
   }, [endpoint?.apiUrl]);
 
   const reorderSource = useCallback(async (id: string, direction: -1 | 1) => {
@@ -239,7 +248,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories, officialResourceSync, syncOfficialResources }}>
+    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, sourceRevision, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories, officialResourceSync, syncOfficialResources }}>
       {children}
     </VodContext.Provider>
   );

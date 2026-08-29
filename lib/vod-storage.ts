@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
+import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
 import type { MacCmsEndpoint, MacCmsEpisode, MacCmsPlaySource, MacCmsVodDetail } from "@/lib/maccms";
@@ -324,15 +325,29 @@ export async function clearPosterCache(): Promise<void> {
   await AsyncStorage.removeItem(POSTER_CACHE_KEY);
 }
 
+async function getCachedFileSize(path: string): Promise<number | null> {
+  try {
+    const info = await FileSystem.getInfoAsync(path);
+    if (info.exists && !info.isDirectory && Number.isFinite(info.size) && info.size > 0) return info.size;
+  } catch {
+    // expo-image may expose an internal cache URI that legacy FileSystem cannot inspect on some Android devices.
+  }
+  try {
+    const size = new File(path).size;
+    return Number.isFinite(size) && size > 0 ? size : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getPosterCacheSummary(): Promise<{ count: number; bytes: number }> {
   const tracked = await getKnownPosterUrls();
   const resolved = await Promise.all(tracked.map(async (url) => {
     try {
       const path = await Image.getCachePathAsync(url);
       if (!path) return null;
-      const info = await FileSystem.getInfoAsync(path);
-      if (!info.exists) return null;
-      return { url, bytes: typeof info.size === "number" ? info.size : 0 };
+      const bytes = await getCachedFileSize(path);
+      return bytes === null ? null : { url, bytes };
     } catch {
       return null;
     }
@@ -340,7 +355,7 @@ export async function getPosterCacheSummary(): Promise<{ count: number; bytes: n
   const cached = resolved.filter((item): item is { url: string; bytes: number } => Boolean(item));
   const cachedUrls = cached.map((item) => item.url);
   if (cachedUrls.length !== tracked.length) await AsyncStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(cachedUrls));
-  return { count: cached.length || tracked.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
+  return { count: cached.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
 }
 
 export async function getLocalCacheSummary(): Promise<{ playbackLists: number; searches: number; history: number; posterCount: number; posterBytes: number }> {

@@ -1,6 +1,6 @@
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { SourceQuickSwitcher } from "@/components/source-quick-switcher";
@@ -17,7 +17,7 @@ const HOME_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
 export default function HomeScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ typeId?: string; sort?: string }>();
-  const { endpoint, sources, categories, isBooting, sourceError, refreshCategories } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("");
   const [activeTypeId, setActiveTypeId] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "hot">("latest");
@@ -28,6 +28,7 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [history, setHistory] = useState<WatchHistoryEntry[]>([]);
+  const loadRequestId = useRef(0);
 
   const selectedRoot = useMemo(() => categories.find((category) => category.id === activeRootId) ?? categories[0] ?? EMPTY_CATEGORY, [activeRootId, categories]);
 
@@ -39,6 +40,16 @@ export default function HomeScreen() {
       setActiveTypeId(categories[0].id);
     }
   }, [activeRootId, categories]);
+
+  useEffect(() => {
+    loadRequestId.current += 1;
+    setItems([]);
+    setPage(1);
+    setPageCount(1);
+    setLoadError(null);
+    setActiveRootId("");
+    setActiveTypeId("");
+  }, [sourceRevision]);
 
   useEffect(() => {
     const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
@@ -53,6 +64,7 @@ export default function HomeScreen() {
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedRoot.id) return;
+    const requestId = ++loadRequestId.current;
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -60,14 +72,15 @@ export default function HomeScreen() {
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize: HOME_PAGE_SIZE, typeId: category.id, sort: sortMode }))))
         : await fetchVodPage(endpoint, { page: requestedPage, pageSize: HOME_PAGE_SIZE, typeId: activeTypeId || selectedRoot.id, sort: sortMode });
+      if (requestId !== loadRequestId.current) return;
       const pageItems = result.items.slice(0, HOME_PAGE_SIZE);
       setItems((current) => sortVodItems(append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems, sortMode));
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "影视列表加载失败");
+      if (requestId === loadRequestId.current) setLoadError(error instanceof Error ? error.message : "影视列表加载失败");
     } finally {
-      setIsLoading(false);
+      if (requestId === loadRequestId.current) setIsLoading(false);
     }
   }, [activeTypeId, endpoint, selectedRoot, sortMode]);
 

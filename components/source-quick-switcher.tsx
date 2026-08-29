@@ -14,7 +14,7 @@ function getSourceName(source: SavedMacCmsSource): string {
 }
 
 function getHealthLabel(source: SavedMacCmsSource): string {
-  if (source.health === "healthy") return `数据正常 · ${source.lastDataCount ?? 0} 部`;
+  if (source.health === "healthy") return "数据正常";
   if (source.health === "unhealthy") return source.lastError || "数据验证失败";
   return "尚未验证数据";
 }

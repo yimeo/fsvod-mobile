@@ -190,8 +190,8 @@ export default function PlayerScreen() {
         safelyPause(player);
         await player.replaceAsync({
           uri: playbackUrl,
-          // Caching direct files is safe, while parser-style playlist sources remain handled by the player.
-          useCaching: Platform.OS === "android" && /\.(mp4|webm|mkv)(?:[?#]|$)/i.test(playbackUrl),
+          // Android native cache is independent from offline downloads and also supports HLS playback.
+          useCaching: Platform.OS === "android" && !isUsingOffline,
         });
         if (cancelled || requestId !== replaceRequestId.current || isLeaving.current) return;
         if (resumePosition > 0 && activeEpisodeUrl === routeEpisodeUrl) {
