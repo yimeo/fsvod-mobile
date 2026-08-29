@@ -14,9 +14,9 @@ function getSourceName(source: SavedMacCmsSource): string {
 }
 
 function getHealthLabel(source: SavedMacCmsSource): string {
-  if (source.health === "healthy") return "连接正常";
-  if (source.health === "unhealthy") return "连接异常";
-  return "待检测";
+  if (source.health === "healthy") return `数据正常 · ${source.lastDataCount ?? 0} 部`;
+  if (source.health === "unhealthy") return source.lastError || "数据验证失败";
+  return "尚未验证数据";
 }
 
 export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProps) {
@@ -65,7 +65,7 @@ export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProp
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.title}>快速切换资源</Text>
-                <Text style={styles.subtitle}>连接验证通过后才会切换当前资源</Text>
+                <Text style={styles.subtitle}>必须验证到有效影视数据后才会切换当前资源</Text>
               </View>
               <Pressable accessibilityLabel="关闭" onPress={() => setVisible(false)} style={({ pressed }) => [styles.closeButton, pressed && styles.triggerPressed]}>
                 <Text style={styles.closeText}>×</Text>
@@ -97,7 +97,7 @@ export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProp
                       </View>
                       <Text numberOfLines={1} style={[styles.optionStatus, item.health === "unhealthy" && styles.optionStatusUnhealthy]}>{statusLabel}</Text>
                     </View>
-                    {switching ? <ActivityIndicator size="small" color="#FFB84D" /> : active ? <Text style={styles.currentLabel}>当前使用</Text> : <Text style={item.health === "unhealthy" ? styles.errorLabel : styles.chooseLabel}>{item.health === "unhealthy" ? "异常" : "选择"}</Text>}
+                    {switching ? <ActivityIndicator size="small" color="#FFB84D" /> : active ? <Text style={styles.currentLabel}>当前使用</Text> : <Text style={item.health === "unhealthy" ? styles.errorLabel : styles.chooseLabel}>{item.health === "unhealthy" ? "异常" : item.health === "healthy" ? "选择" : "待验证"}</Text>}
                   </Pressable>
                 );
               }}

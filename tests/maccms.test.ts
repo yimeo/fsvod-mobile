@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCategoryTree, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, sortVodItems } from "../lib/maccms";
+import { buildCategoryTree, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, probeMacCmsEndpoint, sortVodItems } from "../lib/maccms";
 
 describe("MACCMS 数据适配", () => {
   const endpoint = "https://video.example.com/api.php/provide/vod/";
@@ -99,6 +99,18 @@ describe("MACCMS 数据适配", () => {
     expect(sources).toHaveLength(2);
     expect(sources[0].episodes).toHaveLength(2);
     expect(sources[1].episodes[0].url).toBe("https://cdn.example.com/movie.mp4");
+  });
+
+  it("只有接口返回有效影视记录时才通过数据探针", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async () => new Response(JSON.stringify({ code: 1, total: 1, list: [{ vod_id: 7, vod_name: "真实数据" }] }), { status: 200, headers: { "content-type": "application/json" } });
+      await expect(probeMacCmsEndpoint({ inputDomain: "https://video.example.com", apiUrl: endpoint, detectedAt: new Date().toISOString() })).resolves.toMatchObject({ itemCount: 1 });
+      globalThis.fetch = async () => new Response(JSON.stringify({ code: 1, total: 0, list: [] }), { status: 200, headers: { "content-type": "application/json" } });
+      await expect(probeMacCmsEndpoint({ inputDomain: "https://empty.example.com", apiUrl: endpoint, detectedAt: new Date().toISOString() })).rejects.toThrow("没有返回有效影视数据");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("合并一级分类与二级分类的分页内容并去重", () => {

@@ -40,7 +40,7 @@ const env = {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "1.2.5",
+  version: "1.2.2",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,
@@ -54,7 +54,7 @@ const config: ExpoConfig = {
       }
   },
   android: {
-    versionCode: 18,
+    versionCode: 15,
     adaptiveIcon: {
       backgroundColor: "#0B1020",
       foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -128,7 +128,7 @@ const config: ExpoConfig = {
   },
   extra: {
     eas: {
-      projectId: "43f3a4c6-64c3-496c-b13c-823baad2cbd8",
+      projectId: "ba408241-a9b2-49ec-98d2-b8dbcdeadace",
     },
   },
 };

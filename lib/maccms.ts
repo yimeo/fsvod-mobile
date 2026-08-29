@@ -60,6 +60,12 @@ export interface MacCmsCatalog {
   initialPage: MacCmsPage;
 }
 
+export interface MacCmsProbeResult {
+  page: MacCmsPage;
+  categories: MacCmsCategory[];
+  itemCount: number;
+}
+
 type RecordValue = Record<string, unknown>;
 
 const API_SUFFIXES = [
@@ -260,20 +266,29 @@ export function buildCategoryTree(payloads: unknown[], fallbackItems: MacCmsVod[
   return roots;
 }
 
+export async function probeMacCmsEndpoint(endpoint: MacCmsEndpoint): Promise<MacCmsProbeResult> {
+  const payload = await getJson(addQuery(endpoint.apiUrl, { ac: "list", pg: 1, pagesize: 20 }));
+  const page = parseMacCmsPage(payload, endpoint.apiUrl);
+  if (page.items.length === 0) {
+    throw new Error("接口可以访问，但没有返回有效影视数据");
+  }
+  const categories = buildCategoryTree([payload], page.items);
+  return { page, categories, itemCount: page.items.length };
+}
+
 export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog> {
   const candidates = buildCandidateUrls(inputDomain);
   const errors: string[] = [];
   for (const apiUrl of candidates) {
     try {
-      const payload = await getJson(addQuery(apiUrl, { ac: "list", pg: 1, pagesize: 20 }));
-      const initialPage = parseMacCmsPage(payload, apiUrl);
       const endpoint = { inputDomain: inputDomain.trim(), apiUrl, detectedAt: new Date().toISOString() };
-      return { endpoint, categories: buildCategoryTree([payload], initialPage.items), initialPage };
+      const probe = await probeMacCmsEndpoint(endpoint);
+      return { endpoint, categories: probe.categories, initialPage: probe.page };
     } catch (error) {
       errors.push(`${apiUrl}: ${error instanceof Error ? error.message : "连接失败"}`);
     }
   }
-  throw new Error(`未识别到兼容的 MACCMS API。${errors.length ? "请确认域名已开放数据接口。" : ""}`);
+  throw new Error(`未识别到兼容且有数据的 MACCMS API。${errors.length ? "请确认接口返回了有效影视列表。" : ""}`);
 }
 
 export async function fetchVodPage(

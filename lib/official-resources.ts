@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { toChineseNetworkError } from "./network-error";
 
 export const OFFICIAL_RESOURCE_CONFIG_URLS = [
-  "https://api.075700.xyz/api.json",
+  "https://api.075700xyz/api.json",
   "http://api.07571800.xyz/api.json",
 ] as const;
 
@@ -144,30 +144,11 @@ export function parseOfficialResourceConfig(payload: unknown): { primaryApi: str
   return { primaryApi, backupApi, configUrls: [...configUrls], resources };
 }
 
-function buildFreshConfigRequestUrl(url: string): string {
-  const cacheBust = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  try {
-    const parsed = new URL(url);
-    parsed.searchParams.set("__fsvod_nocache", cacheBust);
-    return parsed.toString();
-  } catch {
-    return `${url}${url.includes("?") ? "&" : "?"}__fsvod_nocache=${encodeURIComponent(cacheBust)}`;
-  }
-}
-
 async function requestOfficialConfig(url: string): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(buildFreshConfigRequestUrl(url), {
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Cache-Control": "no-cache, no-store, max-age=0",
-        Pragma: "no-cache",
-      },
-      cache: "no-store",
-      signal: controller.signal,
-    });
+    const response = await fetch(url, { headers: { Accept: "application/json, text/plain, */*" }, signal: controller.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.text();
     return JSON.parse(body.replace(/^\uFEFF/, "")) as unknown;

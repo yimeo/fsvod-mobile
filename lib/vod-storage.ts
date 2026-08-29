@@ -19,6 +19,7 @@ const MAX_TRACKED_POSTERS = 360;
 export type CategoryPageMode = "auto" | "manual" | "classic";
 export type CategoryClassicPageSize = 12 | 24 | 30 | 60;
 export const DEFAULT_LIST_PAGE_SIZE: CategoryClassicPageSize = 24;
+export const MAX_CUSTOM_SOURCES = 10;
 
 export interface WatchHistoryEntry {
   id: string;
@@ -46,6 +47,7 @@ export interface SavedMacCmsSource {
   health: SourceHealth;
   lastCheckedAt: string | null;
   lastError: string | null;
+  lastDataCount: number | null;
 }
 
 async function getJson<T>(key: string, fallback: T): Promise<T> {
@@ -73,16 +75,36 @@ function sourceId(endpoint: MacCmsEndpoint): string {
   return endpoint.apiUrl;
 }
 
+export function sourceEndpointKey(value: MacCmsEndpoint | string): string {
+  const raw = typeof value === "string" ? value : value.apiUrl;
+  try {
+    const url = new URL(raw.trim());
+    url.hash = "";
+    url.hostname = url.hostname.toLowerCase();
+    url.pathname = url.pathname.replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/";
+    const sortedParams = [...url.searchParams.entries()].sort(([left], [right]) => left.localeCompare(right));
+    url.search = "";
+    sortedParams.forEach(([key, item]) => url.searchParams.append(key, item));
+    return url.toString();
+  } catch {
+    return raw.trim().replace(/\/$/, "").toLowerCase();
+  }
+}
+
+export function isSameSourceEndpoint(left: MacCmsEndpoint | string, right: MacCmsEndpoint | string): boolean {
+  return sourceEndpointKey(left) === sourceEndpointKey(right);
+}
+
 export async function getSources(): Promise<SavedMacCmsSource[]> {
   const saved = await getJson<SavedMacCmsSource[]>(SOURCES_KEY, []);
   if (saved.length) {
-    const normalized = saved.map((source) => ({ ...source, displayName: source.displayName?.trim() || source.endpoint.inputDomain }));
-    if (normalized.some((source, index) => source.displayName !== saved[index]?.displayName)) await saveSources(normalized);
+    const normalized = saved.map((source) => ({ ...source, displayName: source.displayName?.trim() || source.endpoint.inputDomain, lastDataCount: typeof source.lastDataCount === "number" ? source.lastDataCount : null }));
+    if (normalized.some((source, index) => source.displayName !== saved[index]?.displayName || source.lastDataCount !== saved[index]?.lastDataCount)) await saveSources(normalized);
     return normalized;
   }
   const legacy = await getEndpoint();
   if (!legacy) return [];
-  const migrated: SavedMacCmsSource[] = [{ id: sourceId(legacy), endpoint: legacy, displayName: legacy.inputDomain, health: "unknown", lastCheckedAt: null, lastError: null }];
+  const migrated: SavedMacCmsSource[] = [{ id: sourceId(legacy), endpoint: legacy, displayName: legacy.inputDomain, health: "unknown", lastCheckedAt: null, lastError: null, lastDataCount: null }];
   await AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(migrated));
   return migrated;
 }
@@ -91,9 +113,10 @@ export function saveSources(sources: SavedMacCmsSource[]): Promise<void> {
   return AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(sources));
 }
 
-export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null, displayName?: string, metadata?: Pick<SavedMacCmsSource, "sourceType" | "officialKey">): Promise<SavedMacCmsSource[]> {
+export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null, displayName?: string, metadata?: Pick<SavedMacCmsSource, "sourceType" | "officialKey">, lastDataCount: number | null = null): Promise<SavedMacCmsSource[]> {
   const sources = await getSources();
-  const currentIndex = sources.findIndex((source) => source.id === sourceId(endpoint));
+      const currentIndex = sources.findIndex((source) => isSameSourceEndpoint(source.endpoint, endpoint));
+
   const current = currentIndex >= 0 ? sources[currentIndex] : undefined;
   const entry: SavedMacCmsSource = {
     id: sourceId(endpoint),
@@ -104,6 +127,7 @@ export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealt
     health,
     lastCheckedAt: new Date().toISOString(),
     lastError,
+    lastDataCount: current?.lastDataCount ?? lastDataCount,
   };
   const next = current
     ? sources.map((source) => source.id === entry.id ? entry : source)
@@ -112,7 +136,7 @@ export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealt
   return next;
 }
 
-export async function replaceSource(id: string, endpoint: MacCmsEndpoint, displayName: string): Promise<SavedMacCmsSource[]> {
+export async function replaceSource(id: string, endpoint: MacCmsEndpoint, displayName: string, lastDataCount: number | null = null): Promise<SavedMacCmsSource[]> {
   const sources = await getSources();
   const previousIndex = sources.findIndex((source) => source.id === id);
   const current = sources[previousIndex];
@@ -125,15 +149,16 @@ export async function replaceSource(id: string, endpoint: MacCmsEndpoint, displa
     health: "healthy",
     lastCheckedAt: new Date().toISOString(),
     lastError: null,
+    lastDataCount,
   };
-  const next = sources.filter((source) => source.id !== id && source.id !== entry.id);
+  const next = sources.filter((source) => source.id !== id && !isSameSourceEndpoint(source.endpoint, endpoint));
   next.splice(Math.max(0, Math.min(previousIndex, next.length)), 0, entry);
   await saveSources(next);
   return next;
 }
 
-export async function updateSourceHealth(id: string, health: SourceHealth, lastError: string | null = null): Promise<SavedMacCmsSource[]> {
-  const next = (await getSources()).map((source) => source.id === id ? { ...source, health, lastCheckedAt: new Date().toISOString(), lastError } : source);
+export async function updateSourceHealth(id: string, health: SourceHealth, lastError: string | null = null, lastDataCount?: number | null): Promise<SavedMacCmsSource[]> {
+  const next = (await getSources()).map((source) => source.id === id ? { ...source, health, lastCheckedAt: new Date().toISOString(), lastError, lastDataCount: lastDataCount === undefined ? source.lastDataCount : lastDataCount } : source);
   await saveSources(next);
   return next;
 }
@@ -299,19 +324,13 @@ export async function clearPosterCache(): Promise<void> {
   await AsyncStorage.removeItem(POSTER_CACHE_KEY);
 }
 
-function toFileUri(path: string): string {
-  // expo-image Android returns Glide's absolute path (for example
-  // /data/user/0/.../image) while expo-file-system expects file:// URIs.
-  return path.startsWith("file://") ? path : path.startsWith("/") ? `file://${path}` : path;
-}
-
 export async function getPosterCacheSummary(): Promise<{ count: number; bytes: number }> {
   const tracked = await getKnownPosterUrls();
   const resolved = await Promise.all(tracked.map(async (url) => {
     try {
       const path = await Image.getCachePathAsync(url);
       if (!path) return null;
-      const info = await FileSystem.getInfoAsync(toFileUri(path));
+      const info = await FileSystem.getInfoAsync(path);
       if (!info.exists) return null;
       return { url, bytes: typeof info.size === "number" ? info.size : 0 };
     } catch {
