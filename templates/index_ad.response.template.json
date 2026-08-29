@@ -1,0 +1,30 @@
+{
+  "format": "fsvod.index-ad.v1",
+  "updated_at": "2026-08-29T00:00:00Z",
+  "items": [
+    {
+      "id": "notice-001",
+      "title": "广告标题示例",
+      "subtitle": "替换为实际广告说明，建议不超过 28 个汉字。",
+      "image_url": "https://cdn.example.com/ads/notice-001.jpg",
+      "target": {
+        "type": "web",
+        "url": "https://example.com/landing"
+      },
+      "duration_seconds": 5,
+      "active": true
+    },
+    {
+      "id": "notice-002",
+      "title": "第二条广告示例",
+      "subtitle": "多个 active 广告会按照数组顺序自动轮播。",
+      "image_url": "https://cdn.example.com/ads/notice-002.jpg",
+      "target": {
+        "type": "vod",
+        "vod_id": "12345"
+      },
+      "duration_seconds": 6,
+      "active": true
+    }
+  ]
+}

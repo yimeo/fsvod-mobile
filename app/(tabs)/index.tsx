@@ -1,14 +1,16 @@
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Image } from "expo-image";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { SourceQuickSwitcher } from "@/components/source-quick-switcher";
 import { VodCard } from "@/components/vod-card";
 import { VodPoster } from "@/components/vod-poster";
 import { buildHistoryPlaybackParams } from "@/lib/history-playback";
+import { loadIndexAds, type IndexAd } from "@/lib/index-ad";
 import { fetchVodPage, mergeMacCmsPages, sortVodItems, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
-import { DEFAULT_LIST_PAGE_SIZE, getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, getSourceTypeLabel, getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
@@ -17,7 +19,7 @@ const HOME_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
 export default function HomeScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ typeId?: string; sort?: string }>();
-  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision, preferredCategoryId, refreshCategories } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError, refreshCategories } = useVodSource();
   const [activeRootId, setActiveRootId] = useState("");
   const [activeTypeId, setActiveTypeId] = useState("");
   const [sortMode, setSortMode] = useState<"latest" | "hot">("latest");
@@ -28,29 +30,42 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [history, setHistory] = useState<WatchHistoryEntry[]>([]);
-  const loadRequestId = useRef(0);
+  const [indexAds, setIndexAds] = useState<IndexAd[]>([]);
+  const [activeAdIndex, setActiveAdIndex] = useState(0);
+  const [failedAdIds, setFailedAdIds] = useState<string[]>([]);
 
-  const selectedRoot = useMemo(() => categories.find((category) => category.id === activeRootId) ?? categories.find((category) => category.id === preferredCategoryId || category.children.some((child) => child.id === preferredCategoryId)) ?? categories[0] ?? EMPTY_CATEGORY, [activeRootId, categories, preferredCategoryId]);
+  const selectedRoot = useMemo(() => categories.find((category) => category.id === activeRootId) ?? categories[0] ?? EMPTY_CATEGORY, [activeRootId, categories]);
 
   useEffect(() => { void getWatchHistory().then(setHistory); }, []);
 
   useEffect(() => {
-    const preferredRoot = categories.find((category) => category.id === preferredCategoryId || category.children.some((child) => child.id === preferredCategoryId)) ?? categories[0];
-    if (preferredRoot && !categories.some((category) => category.id === activeRootId)) {
-      setActiveRootId(preferredRoot.id);
-      setActiveTypeId(preferredCategoryId || preferredRoot.id);
-    }
-  }, [activeRootId, categories, preferredCategoryId]);
+    let active = true;
+    const delay = setTimeout(() => {
+      void loadIndexAds().then(({ ads }) => {
+        if (!active) return;
+        setIndexAds(ads);
+        setActiveAdIndex(0);
+        setFailedAdIds([]);
+      });
+    }, 1_200);
+    return () => { active = false; clearTimeout(delay); };
+  }, []);
+
+  const displayAds = useMemo(() => indexAds.filter((ad) => !failedAdIds.includes(ad.id)), [failedAdIds, indexAds]);
+  const activeAd = displayAds.length ? displayAds[activeAdIndex % displayAds.length] : null;
 
   useEffect(() => {
-    loadRequestId.current += 1;
-    setItems([]);
-    setPage(1);
-    setPageCount(1);
-    setLoadError(null);
-    setActiveRootId("");
-    setActiveTypeId(preferredCategoryId);
-  }, [preferredCategoryId, sourceRevision]);
+    if (!activeAd || displayAds.length < 2) return;
+    const timer = setTimeout(() => setActiveAdIndex((current) => (current + 1) % displayAds.length), activeAd.durationSeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [activeAd, displayAds.length]);
+
+  useEffect(() => {
+    if (categories.length && !categories.some((category) => category.id === activeRootId)) {
+      setActiveRootId(categories[0].id);
+      setActiveTypeId(categories[0].id);
+    }
+  }, [activeRootId, categories]);
 
   useEffect(() => {
     const targetTypeId = Array.isArray(routeParams.typeId) ? routeParams.typeId[0] : routeParams.typeId;
@@ -65,7 +80,6 @@ export default function HomeScreen() {
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedRoot.id) return;
-    const requestId = ++loadRequestId.current;
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -73,17 +87,28 @@ export default function HomeScreen() {
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([selectedRoot, ...selectedRoot.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize: HOME_PAGE_SIZE, typeId: category.id, sort: sortMode }))))
         : await fetchVodPage(endpoint, { page: requestedPage, pageSize: HOME_PAGE_SIZE, typeId: activeTypeId || selectedRoot.id, sort: sortMode });
-      if (requestId !== loadRequestId.current) return;
       const pageItems = result.items.slice(0, HOME_PAGE_SIZE);
+      if (!append && pageItems.length === 0) {
+        const currentRootIndex = categories.findIndex((category) => category.id === selectedRoot.id);
+        const nextCategory = categories.slice(Math.max(0, currentRootIndex + 1)).find((category) => category.id !== selectedRoot.id);
+        if (nextCategory) {
+          setItems([]);
+          setPage(1);
+          setPageCount(1);
+          setActiveRootId(nextCategory.id);
+          setActiveTypeId(nextCategory.id);
+          return;
+        }
+      }
       setItems((current) => sortVodItems(append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems, sortMode));
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
-      if (requestId === loadRequestId.current) setLoadError(error instanceof Error ? error.message : "影视列表加载失败");
+      setLoadError(error instanceof Error ? error.message : "影视列表加载失败");
     } finally {
-      if (requestId === loadRequestId.current) setIsLoading(false);
+      setIsLoading(false);
     }
-  }, [activeTypeId, endpoint, selectedRoot, sortMode]);
+  }, [activeTypeId, categories, endpoint, selectedRoot, sortMode]);
 
   useEffect(() => { if (selectedRoot.id) void loadPage(1); }, [loadPage, selectedRoot.id]);
 
@@ -102,6 +127,7 @@ export default function HomeScreen() {
   const displayItems = items;
   const currentSource = sources.find((source) => source.id === endpoint?.apiUrl);
   const sourceCaption = currentSource?.displayName?.trim() || endpoint?.inputDomain || "";
+  const sourceTypeLabel = currentSource ? getSourceTypeLabel(currentSource) : "普通";
   const sourceConnectionTone = currentSource?.health === "healthy"
     ? "healthy"
     : currentSource?.health === "unhealthy"
@@ -119,16 +145,34 @@ export default function HomeScreen() {
     }
   };
 
+  const openIndexAd = useCallback(async () => {
+    if (!activeAd?.target) return;
+    if (activeAd.target.type === "vod") {
+      router.push({ pathname: "/vod/[id]", params: { id: activeAd.target.vodId } } as never);
+      return;
+    }
+    try {
+      if (await Linking.canOpenURL(activeAd.target.url)) await Linking.openURL(activeAd.target.url);
+    } catch {
+      // A failed advert link must not interfere with the home page or its fallback card.
+    }
+  }, [activeAd, router]);
+
+  const markAdImageFailed = useCallback((id: string) => {
+    setFailedAdIds((current) => current.includes(id) ? current : [...current, id]);
+    setActiveAdIndex(0);
+  }, []);
+
   if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#FFB84D" size="large" /></ScreenContainer>;
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><VodPoster title="飞鸿影院" url={null} style={styles.emptyIcon} /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
 
   const listHeader = <View>
-    <View style={styles.appHeader}><View style={styles.headerIdentity}><Text style={styles.brandName}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceMetaRow}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></SourceQuickSwitcher></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
-    <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>
+    <View style={styles.appHeader}><View style={styles.headerIdentity}><Text style={styles.brandName}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceMetaRow}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text>{endpoint ? <Text style={[styles.sourceTypeTag, sourceTypeLabel === "普通" && styles.sourceTypeTagNormal]}>{sourceTypeLabel}</Text> : null}</SourceQuickSwitcher></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
+    {activeAd ? <Pressable accessibilityRole="button" accessibilityLabel={`打开广告：${activeAd.title}`} onPress={() => void openIndexAd()} style={({ pressed }) => [styles.heroCard, styles.adHeroCard, pressed && styles.pressed]}><Image source={{ uri: activeAd.imageUrl }} style={styles.adImage} contentFit="cover" transition={180} onError={() => markAdImageFailed(activeAd.id)} /><View style={styles.adScrim} /><View style={styles.adContent}><Text style={styles.adKicker}>推广</Text><Text numberOfLines={2} style={styles.heroTitle}>{activeAd.title}</Text>{activeAd.subtitle ? <Text numberOfLines={2} style={styles.heroText}>{activeAd.subtitle}</Text> : null}<View style={styles.adAction}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>{activeAd.target ? "查看详情" : "精彩推荐"}</Text></View></View>{displayAds.length > 1 ? <View style={styles.adPagination}>{displayAds.map((ad, index) => <Pressable key={ad.id} accessibilityLabel={`切换至广告 ${index + 1}`} onPress={() => setActiveAdIndex(index)} style={[styles.adDot, index === activeAdIndex % displayAds.length && styles.adDotActive]} />)}</View> : null}</Pressable> : <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>}
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>{items.length ? "网络不可用，正在展示本地已缓存内容。请尝试更换数据源。" : "网络不可用，暂时无法加载内容。请尝试更换数据源。"}</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
     {latestHistory ? <View style={styles.continueSection}><View style={styles.continueHeading}><View><Text style={styles.sectionTitle}>继续观看</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text></View><Pressable onPress={() => router.push("/history" as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View><Pressable onPress={() => void resumeHistory(latestHistory)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text numberOfLines={1} style={styles.continueMeta}>{latestHistory.episodeName || "影视内容"}{latestHistory.positionSeconds ? ` · ${formatDuration(latestHistory.positionSeconds)}` : ""}</Text><View style={styles.continueLine}><View style={[styles.continueProgress, { width: `${continueProgress}%` }]} /></View></View></Pressable></View> : null}
-    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>{`正在热映${selectedRoot.name || ""}`}</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable accessibilityLabel={`查看${selectedRoot.name || "电影"}更多影片`} onPress={() => router.navigate({ pathname: "/categories", params: { rootId: selectedRoot.id } } as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
+    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable accessibilityLabel={`查看${selectedRoot.name || "电影"}更多影片`} onPress={() => router.navigate({ pathname: "/categories", params: { rootId: selectedRoot.id } } as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
     {loadError ? <Text style={styles.loadError}>{loadError}</Text> : null}
   </View>;
 
@@ -151,12 +195,23 @@ const styles = StyleSheet.create({
   brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, maxWidth: 150, flexShrink: 1 },
+  sourceTypeTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  sourceTypeTagNormal: { color: "#F6D39A", backgroundColor: "#584222" },
   sourceConnectionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#77869D", flexShrink: 0 },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
   searchButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#20293A", justifyContent: "center", alignItems: "center" },
   searchIcon: { color: "#F6F7FB", fontWeight: "700", fontSize: 28, lineHeight: 30, transform: [{ rotate: "-20deg" }] },
   heroCard: { minHeight: 307, overflow: "hidden", backgroundColor: "#1E2238", borderRadius: 24, padding: 28 },
+  adHeroCard: { padding: 0, position: "relative", justifyContent: "flex-end" },
+  adImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  adScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(9, 12, 25, 0.42)" },
+  adContent: { minHeight: 307, justifyContent: "flex-end", padding: 28 },
+  adKicker: { color: "#FFC158", fontSize: 12, lineHeight: 18, fontWeight: "900", letterSpacing: 1.1, marginBottom: 7 },
+  adAction: { alignSelf: "flex-start", height: 50, paddingHorizontal: 19, borderRadius: 14, backgroundColor: "#FFB84D", marginTop: 21, flexDirection: "row", alignItems: "center", gap: 9 },
+  adPagination: { position: "absolute", right: 20, bottom: 19, flexDirection: "row", gap: 6 },
+  adDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.48)" },
+  adDotActive: { width: 20, backgroundColor: "#FFB84D" },
   heroOrb: { position: "absolute", width: 235, height: 235, borderRadius: 118, right: -43, top: -58, backgroundColor: "#62513B", opacity: 0.85 },
   heroKicker: { color: "#FFC158", fontSize: 13, lineHeight: 19, fontWeight: "900" },
   heroTitle: { color: "#F8F8FA", fontSize: 29, lineHeight: 38, fontWeight: "900", marginTop: 11, maxWidth: 275 },

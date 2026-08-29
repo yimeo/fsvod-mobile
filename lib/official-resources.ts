@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { toChineseNetworkError } from "./network-error";
 
 export const OFFICIAL_RESOURCE_CONFIG_URLS = [
-  "https://api.075700xyz/api.json",
+  "https://api.075700.xyz/api.json",
   "http://api.07571800.xyz/api.json",
 ] as const;
 

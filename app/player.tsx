@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VideoView, useVideoPlayer } from "expo-video";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { GlobalBottomNavigation } from "@/components/global-bottom-navigation";
 import { ScreenContainer } from "@/components/screen-container";
@@ -53,6 +54,12 @@ function formatNetworkSpeed(bytesPerSecond: number): string {
   if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "— MB/s";
   const kilobitsPerSecond = (bytesPerSecond * 8) / 1000;
   return `${kilobitsPerSecond >= 100 ? Math.round(kilobitsPerSecond) : kilobitsPerSecond.toFixed(1)} MB/s`;
+}
+
+const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5] as const;
+
+function formatPlaybackRate(rate: number): string {
+  return Number.isInteger(rate) ? String(rate) : String(rate).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 export default function PlayerScreen() {
@@ -113,6 +120,10 @@ export default function PlayerScreen() {
   const [playerStatus, setPlayerStatus] = useState<"idle" | "loading" | "readyToPlay" | "error">("idle");
   const [bufferedPosition, setBufferedPosition] = useState(-1);
   const [networkSpeed, setNetworkSpeed] = useState("检测中…");
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [isRatePickerOpen, setIsRatePickerOpen] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const player = useVideoPlayer(null);
   const lastSavedPosition = useRef(0);
   const latestPosition = useRef(0);
@@ -190,8 +201,8 @@ export default function PlayerScreen() {
         safelyPause(player);
         await player.replaceAsync({
           uri: playbackUrl,
-          // Android native cache is independent from offline downloads and also supports HLS playback.
-          useCaching: Platform.OS === "android" && !isUsingOffline,
+          // Android supports native caching for direct progressive and HLS playback.
+          useCaching: Platform.OS === "android",
         });
         if (cancelled || requestId !== replaceRequestId.current || isLeaving.current) return;
         if (resumePosition > 0 && activeEpisodeUrl === routeEpisodeUrl) {
@@ -218,6 +229,15 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!directPlayable) return;
+    try {
+      player.playbackRate = playbackRate;
+    } catch {
+      // The current source may still be replacing; the ready state applies the chosen rate again.
+    }
+  }, [directPlayable, playbackRate, player]);
+
+  useEffect(() => {
+    if (!directPlayable) return;
     player.timeUpdateEventInterval = 5;
     const timeSubscription = player.addListener("timeUpdate", ({ currentTime, bufferedPosition: nextBufferedPosition }) => {
       if (Number.isFinite(currentTime)) {
@@ -230,9 +250,11 @@ export default function PlayerScreen() {
       setPlayerStatus(status);
       if (status === "error") setPlaybackMessage(error?.message || "当前线路加载失败，请切换其他线路。");
     });
+    const playingSubscription = player.addListener("playingChange", ({ isPlaying: nextIsPlaying }) => setIsPlaying(nextIsPlaying));
     return () => {
       timeSubscription.remove();
       statusSubscription.remove();
+      playingSubscription.remove();
     };
   }, [directPlayable, persistProgress, player]);
 
@@ -304,6 +326,38 @@ export default function PlayerScreen() {
     }
   }, [activeEpisodeUrl]);
 
+  const togglePlayback = useCallback(() => {
+    if (!directPlayable || playerStatus === "error" || playerStatus === "loading") return;
+    try {
+      if (player.playing) {
+        player.pause();
+        setIsPlaying(false);
+      } else {
+        player.play();
+        setIsPlaying(true);
+      }
+    } catch {
+      setPlaybackMessage("当前视频暂时无法切换播放状态。");
+    }
+  }, [directPlayable, player, playerStatus]);
+
+  const setRate = useCallback((nextRate: number) => {
+    try {
+      // Change only the native player's rate. Do not replace the source or seek;
+      // expo-video keeps currentTime when playbackRate changes in place.
+      player.playbackRate = nextRate;
+      setPlaybackRate(nextRate);
+      setIsRatePickerOpen(false);
+    } catch {
+      setPlaybackMessage("当前线路暂不支持调整倍速。");
+    }
+  }, [player]);
+
+  const doubleTap = useMemo(
+    () => Gesture.Tap().numberOfTaps(2).maxDelay(260).runOnJS(true).onEnd((_event, success) => { if (success) togglePlayback(); }),
+    [togglePlayback],
+  );
+
   const playEpisodeAt = useCallback((index: number) => {
     if (!activeSource?.episodes[index] || index === activeEpisodeIndex || isLeaving.current) return;
     replaceRequestId.current += 1;
@@ -367,12 +421,35 @@ export default function PlayerScreen() {
           {directPlayable ? (
             <View style={styles.playerWrap}>
               <View style={styles.videoStage}>
-                <VideoView style={styles.video} player={player} nativeControls allowsFullscreen allowsPictureInPicture contentFit="contain" surfaceType="textureView" />
+                <GestureDetector gesture={doubleTap}>
+                  <View style={styles.videoTouchArea}>
+                    <VideoView
+                      style={styles.video}
+                      player={player}
+                      nativeControls
+                      fullscreenOptions={{ enable: true, orientation: "landscape", autoExitOnRotate: true }}
+                      allowsPictureInPicture
+                      contentFit="contain"
+                      surfaceType="textureView"
+                      useExoShutter
+                      onFullscreenEnter={() => setIsFullscreen(true)}
+                      onFullscreenExit={() => setIsFullscreen(false)}
+                    />
+                  </View>
+                </GestureDetector>
                 {(!isOfflineResolved || (playerStatus !== "readyToPlay" && playerStatus !== "error")) ? <View style={styles.loadingOverlay}><ActivityIndicator color="#F5B64B" size="large" /><Text style={styles.loadingTitle}>{!isOfflineResolved ? "正在准备影视…" : playerStatus === "loading" ? "正在加载影视…" : "正在连接播放源…"}</Text><Text style={styles.loadingMeta}>{isUsingOffline ? "正在读取本机缓存" : `网络速度 ${networkSpeed}`}</Text></View> : null}
               </View>
               <View style={styles.statusRow}>
                 <Text style={isUsingOffline ? styles.offlineBadge : styles.networkBadge}>{isUsingOffline ? "离线播放" : "网络播放"}</Text>
-                <Text numberOfLines={1} ellipsizeMode="tail" style={styles.statusText}>{isUsingOffline ? "状态：已连接 · 缓冲：本地" : `状态：${playerStatus === "readyToPlay" ? "播放就绪" : playerStatus === "error" ? "连接异常" : "加载中"} · 网速：${networkSpeed} · 缓冲：${bufferedPosition >= 0 ? `${Math.max(0, bufferedPosition).toFixed(0)} 秒` : "检测中"}`}</Text>
+                {!isUsingOffline ? <Pressable accessibilityRole="button" accessibilityLabel="选择播放倍速" onPress={() => setIsRatePickerOpen((current) => !current)} style={({ pressed }) => [styles.rateTrigger, isRatePickerOpen && styles.rateTriggerOpen, pressed && styles.pressed]}><Text style={styles.rateTriggerText}>倍速 {formatPlaybackRate(playbackRate)}×</Text></Pressable> : null}
+                <Text numberOfLines={1} ellipsizeMode="tail" style={styles.statusText}>{isUsingOffline ? "状态：已连接 · 缓冲：本地" : `状态：${playerStatus === "readyToPlay" ? (isPlaying ? "播放中" : "已暂停") : playerStatus === "error" ? "连接异常" : "加载中"} · 网速：${networkSpeed} · 缓冲：${bufferedPosition >= 0 ? `${Math.max(0, bufferedPosition).toFixed(0)} 秒` : "检测中"}`}</Text>
+              </View>
+              {!isUsingOffline && isRatePickerOpen ? <View style={styles.ratePicker}>{PLAYBACK_RATES.map((rate) => <Pressable key={rate} accessibilityRole="button" accessibilityLabel={`设置 ${formatPlaybackRate(rate)} 倍速`} onPress={() => setRate(rate)} style={({ pressed }) => [styles.speedChip, playbackRate === rate && styles.speedChipActive, pressed && styles.pressed]}><Text style={[styles.speedChipText, playbackRate === rate && styles.speedChipTextActive]}>{formatPlaybackRate(rate)}×</Text></Pressable>)}</View> : null}
+              <View style={styles.playerTools}>
+                <Pressable onPress={togglePlayback} style={({ pressed }) => [styles.playToggle, pressed && styles.pressed]}>
+                  <Text style={styles.playToggleText}>{isPlaying ? "暂停" : "播放"}</Text>
+                </Pressable>
+                <Text style={styles.fullscreenHint}>{isFullscreen ? "全屏中" : "双击播放/暂停 · 全屏横屏"}</Text>
               </View>
             </View>
           ) : (
@@ -465,6 +542,7 @@ const styles = StyleSheet.create({
   episode: { color: "#9CA7BE", fontSize: 11, lineHeight: 16, marginTop: 1 },
   playerWrap: { paddingTop: 18 },
   videoStage: { position: "relative" },
+  videoTouchArea: { width: "100%", aspectRatio: 16 / 9 },
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#050812" },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5, 8, 18, 0.82)" },
   loadingTitle: { color: "#F4F6FA", fontSize: 14, lineHeight: 20, fontWeight: "800", marginTop: 10 },
@@ -473,6 +551,18 @@ const styles = StyleSheet.create({
   statusText: { color: "#8796B0", fontSize: 11, lineHeight: 17, flex: 1, flexShrink: 1 },
   offlineBadge: { color: "#A9E2BE", fontSize: 11, lineHeight: 17, fontWeight: "800", backgroundColor: "#1F523F", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   networkBadge: { color: "#B9C8DB", fontSize: 11, lineHeight: 17, fontWeight: "800", backgroundColor: "#27344B", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  rateTrigger: { height: 23, paddingHorizontal: 7, justifyContent: "center", borderRadius: 6, backgroundColor: "#20293A", borderWidth: 1, borderColor: "#3A4965" },
+  rateTriggerOpen: { backgroundColor: "#314C70", borderColor: "#7FB2E8" },
+  rateTriggerText: { color: "#DDE9F8", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  ratePicker: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginHorizontal: 18, marginTop: 9, padding: 10, borderRadius: 12, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#2C3B58" },
+  playerTools: { flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 18, paddingTop: 11 },
+  playToggle: { height: 30, minWidth: 48, paddingHorizontal: 10, justifyContent: "center", alignItems: "center", borderRadius: 8, backgroundColor: "#F5B64B" },
+  playToggleText: { color: "#151821", fontSize: 11, lineHeight: 16, fontWeight: "900" },
+  speedChip: { height: 30, minWidth: 38, paddingHorizontal: 6, justifyContent: "center", alignItems: "center", borderRadius: 8, backgroundColor: "#20293A", borderWidth: 1, borderColor: "#3A4965" },
+  speedChipActive: { backgroundColor: "#314C70", borderColor: "#7FB2E8" },
+  speedChipText: { color: "#B9C8DB", fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  speedChipTextActive: { color: "#F5F8FF" },
+  fullscreenHint: { color: "#71809A", fontSize: 10, lineHeight: 15, marginLeft: 1 },
   playbackMessage: { color: "#F4BF83", fontSize: 12, lineHeight: 18, marginHorizontal: 18, marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: "#312632" },
   sourcePanel: { marginHorizontal: 18, marginTop: 22 },
   sourceTitle: { color: "#F2F4F8", fontSize: 16, lineHeight: 23, fontWeight: "900" },

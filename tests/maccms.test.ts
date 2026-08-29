@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCategoryTree, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, probeMacCmsEndpoint, sortVodItems } from "../lib/maccms";
+import { buildCategoryTree, filterCategoriesWithContent, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, sortVodItems } from "../lib/maccms";
 
 describe("MACCMS 数据适配", () => {
   const endpoint = "https://video.example.com/api.php/provide/vod/";
@@ -90,6 +90,52 @@ describe("MACCMS 数据适配", () => {
     expect(categories[0].children.map((item) => item.id)).toEqual(["3", "11"]);
   });
 
+  it("隐藏没有内容的分类，但保留拥有可用子分类的父级", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = (async (input: string | URL | Request) => {
+      const typeId = new URL(typeof input === "string" ? input : input.toString()).searchParams.get("t");
+      const list = typeId === "2" ? [{ vod_id: 200, vod_name: "子分类影片" }] : [];
+      return new Response(JSON.stringify({ code: 1, list }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const tree = buildCategoryTree([{
+        class: [
+          { type_id: 1, type_name: "父级空分类", type_pid: 0 },
+          { type_id: 2, type_name: "有内容子分类", type_pid: 1 },
+          { type_id: 3, type_name: "完全空分类", type_pid: 0 },
+        ],
+      }], []);
+      const filtered = await filterCategoriesWithContent({ inputDomain: "https://video.example.com", apiUrl: endpoint, detectedAt: "2026-08-29T00:00:00.000Z" }, tree);
+      expect(filtered.map((item) => item.id)).toEqual(["1"]);
+      expect(filtered[0].children.map((item) => item.id)).toEqual(["2"]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("跳过没有真实内容的低 ID 分类并保留最小有内容分类", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = (async (input: string | URL | Request) => {
+      const typeId = new URL(typeof input === "string" ? input : input.toString()).searchParams.get("t");
+      const list = typeId === "7" ? [{ vod_id: 700, vod_name: "有内容影片", type_id: 7, type_name: "有内容分类" }] : [];
+      return new Response(JSON.stringify({ code: 1, list }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const tree = buildCategoryTree([{
+        class: [
+          { type_id: 1, type_name: "空的小 ID 分类", type_pid: 0 },
+          { type_id: 7, type_name: "有内容分类", type_pid: 0 },
+        ],
+      }], []);
+      const filtered = await filterCategoriesWithContent({ inputDomain: "https://video.example.com", apiUrl: endpoint, detectedAt: "2026-08-29T00:00:00.000Z" }, tree);
+      expect(filtered.map((item) => item.id)).toEqual(["7"]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   it("解析多线路与多剧集播放地址", () => {
     const sources = parsePlaySources(
       "主线路$$$备用线路",
@@ -99,53 +145,6 @@ describe("MACCMS 数据适配", () => {
     expect(sources).toHaveLength(2);
     expect(sources[0].episodes).toHaveLength(2);
     expect(sources[1].episodes[0].url).toBe("https://cdn.example.com/movie.mp4");
-  });
-
-  it("只有接口返回有效影视记录时才通过数据探针", async () => {
-    const originalFetch = globalThis.fetch;
-    try {
-      globalThis.fetch = async () => new Response(JSON.stringify({ code: 1, total: 1, list: [{ vod_id: 7, vod_name: "真实数据", type_id: 11, type_name: "剧情片" }] }), { status: 200, headers: { "content-type": "application/json" } });
-      await expect(probeMacCmsEndpoint({ inputDomain: "https://video.example.com", apiUrl: endpoint, detectedAt: new Date().toISOString() })).resolves.toMatchObject({ itemCount: 1 });
-      globalThis.fetch = async () => new Response(JSON.stringify({ code: 1, total: 0, list: [] }), { status: 200, headers: { "content-type": "application/json" } });
-      await expect(probeMacCmsEndpoint({ inputDomain: "https://empty.example.com", apiUrl: endpoint, detectedAt: new Date().toISOString() })).rejects.toThrow("没有返回有效影视数据");
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it("验证实际可展示分类并把可用分类放在首页首位", async () => {
-    const originalFetch = globalThis.fetch;
-    try {
-      globalThis.fetch = async (input) => {
-        const url = new URL(String(input));
-        const typeId = url.searchParams.get("t");
-        const payload = typeId === "11"
-          ? { code: 1, total: 1, list: [{ vod_id: 11, vod_name: "可播放剧情片", type_id: 11, type_name: "剧情片" }] }
-          : { code: 1, total: 1, list: [{ vod_id: 11, vod_name: "可播放剧情片", type_id: 11, type_name: "剧情片" }], class: [{ type_id: 1, type_name: "电影" }, { type_id: 11, type_name: "剧情片" }] };
-        return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
-      };
-      const probe = await probeMacCmsEndpoint({ inputDomain: "https://category.example.com", apiUrl: endpoint, detectedAt: new Date().toISOString() });
-      expect(probe.itemCount).toBe(1);
-      expect(probe.categories[0].id).toBe("11");
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it("当应用实际分类列表为空时拒绝将数据源标记为正常", async () => {
-    const originalFetch = globalThis.fetch;
-    try {
-      globalThis.fetch = async (input) => {
-        const url = new URL(String(input));
-        const payload = url.searchParams.get("t")
-          ? { code: 1, total: 0, list: [] }
-          : { code: 1, total: 1, list: [{ vod_id: 7, vod_name: "仅探针可见", type_id: 11, type_name: "剧情片" }] };
-        return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
-      };
-      await expect(probeMacCmsEndpoint({ inputDomain: "https://blocked.example.com", apiUrl: endpoint, detectedAt: new Date().toISOString() })).rejects.toThrow("应用实际分类列表无法读取");
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
   });
 
   it("合并一级分类与二级分类的分页内容并去重", () => {

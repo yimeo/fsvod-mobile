@@ -60,13 +60,6 @@ export interface MacCmsCatalog {
   initialPage: MacCmsPage;
 }
 
-export interface MacCmsProbeResult {
-  page: MacCmsPage;
-  categories: MacCmsCategory[];
-  itemCount: number;
-  preferredTypeId: string;
-}
-
 type RecordValue = Record<string, unknown>;
 
 const API_SUFFIXES = [
@@ -267,32 +260,35 @@ export function buildCategoryTree(payloads: unknown[], fallbackItems: MacCmsVod[
   return roots;
 }
 
-function categoryContainsType(category: MacCmsCategory, typeId: string): boolean {
-  return category.id === typeId || category.children.some((child) => categoryContainsType(child, typeId));
+async function categoryHasContent(endpoint: MacCmsEndpoint, typeId: string): Promise<boolean> {
+  try {
+    const page = await fetchVodPage(endpoint, { page: 1, pageSize: 3, typeId });
+    if (!page.items.length) return false;
+
+    // Some MACCMS servers ignore `t` and return the newest global items. When
+    // type metadata is present, do not mistake those items for category data.
+    const typedItems = page.items.filter((item) => Boolean(item.typeId || item.parentTypeId));
+    if (!typedItems.length) return true;
+    return typedItems.some((item) => item.typeId === typeId || item.parentTypeId === typeId);
+  } catch {
+    return false;
+  }
 }
 
-function promotePlayableCategory(categories: MacCmsCategory[], typeId: string): MacCmsCategory[] {
-  const playableIndex = categories.findIndex((category) => categoryContainsType(category, typeId));
-  if (playableIndex <= 0) return categories;
-  return [categories[playableIndex], ...categories.slice(0, playableIndex), ...categories.slice(playableIndex + 1)];
-}
-
-export async function probeMacCmsEndpoint(endpoint: MacCmsEndpoint): Promise<MacCmsProbeResult> {
-  const payload = await getJson(addQuery(endpoint.apiUrl, { ac: "list", pg: 1, pagesize: 20 }));
-  const initialPage = parseMacCmsPage(payload, endpoint.apiUrl);
-  if (initialPage.items.length === 0) {
-    throw new Error("接口可以访问，但没有返回有效影视数据");
-  }
-  const playableTypeId = initialPage.items.find((item) => Boolean(item.typeId))?.typeId;
-  if (!playableTypeId) throw new Error("接口返回的影视数据缺少可浏览分类");
-
-  // Validate the same category request the home screen will issue, not only the unfiltered API response.
-  const displayPage = await fetchVodPage(endpoint, { page: 1, pageSize: 20, typeId: playableTypeId, sort: "latest" });
-  if (displayPage.items.length === 0) {
-    throw new Error("接口有响应，但应用实际分类列表无法读取");
-  }
-  const categories = promotePlayableCategory(buildCategoryTree([payload], initialPage.items), playableTypeId);
-  return { page: displayPage, categories, itemCount: displayPage.items.length, preferredTypeId: playableTypeId };
+/**
+ * Removes categories that cannot produce a real list in the application.
+ * A root stays visible when it has content itself or at least one visible child.
+ */
+export async function filterCategoriesWithContent(endpoint: MacCmsEndpoint, roots: MacCmsCategory[]): Promise<MacCmsCategory[]> {
+  const results = await Promise.all(roots.map(async (root) => {
+    const [rootHasContent, childResults] = await Promise.all([
+      categoryHasContent(endpoint, root.id),
+      Promise.all(root.children.map(async (child) => ({ child, hasContent: await categoryHasContent(endpoint, child.id) }))),
+    ]);
+    const visibleChildren = childResults.filter((result) => result.hasContent).map((result) => result.child);
+    return rootHasContent || visibleChildren.length > 0 ? { ...root, children: visibleChildren } : null;
+  }));
+  return results.filter((item): item is MacCmsCategory => item !== null);
 }
 
 export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog> {
@@ -300,14 +296,15 @@ export async function discoverMacCms(inputDomain: string): Promise<MacCmsCatalog
   const errors: string[] = [];
   for (const apiUrl of candidates) {
     try {
+      const payload = await getJson(addQuery(apiUrl, { ac: "list", pg: 1, pagesize: 20 }));
+      const initialPage = parseMacCmsPage(payload, apiUrl);
       const endpoint = { inputDomain: inputDomain.trim(), apiUrl, detectedAt: new Date().toISOString() };
-      const probe = await probeMacCmsEndpoint(endpoint);
-      return { endpoint, categories: probe.categories, initialPage: probe.page };
+      return { endpoint, categories: buildCategoryTree([payload], initialPage.items), initialPage };
     } catch (error) {
       errors.push(`${apiUrl}: ${error instanceof Error ? error.message : "连接失败"}`);
     }
   }
-  throw new Error(`未识别到兼容且有数据的 MACCMS API。${errors.length ? "请确认接口返回了有效影视列表。" : ""}`);
+  throw new Error(`未识别到兼容的 MACCMS API。${errors.length ? "请确认域名已开放数据接口。" : ""}`);
 }
 
 export async function fetchVodPage(

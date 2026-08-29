@@ -25,11 +25,11 @@ describe("官方资源配置", () => {
     const requested: string[] = [];
     const catalog = await loadOfficialResourceCatalog(undefined, async (url) => {
       requested.push(url);
-      if (url.includes("api.075700xyz")) throw new Error("主地址不可用");
+      if (url.includes("api.075700.xyz")) throw new Error("主地址不可用");
       return { sources: [{ name: "官方 fsvod", url: "https://fsvod.example.com/api.php/provide/vod/" }] };
     });
 
-    expect(requested).toEqual(["https://api.075700xyz/api.json", "http://api.07571800.xyz/api.json"]);
+    expect(requested).toEqual(["https://api.075700.xyz/api.json", "http://api.07571800.xyz/api.json"]);
     expect(catalog).toMatchObject({ configUrl: "http://api.07571800.xyz/api.json", resources: [{ name: "官方 fsvod" }] });
   });
 
@@ -37,12 +37,12 @@ describe("官方资源配置", () => {
     const requested: string[] = [];
     const catalog = await loadOfficialResourceCatalog(undefined, async (url) => {
       requested.push(url);
-      if (url.includes("api.075700xyz")) throw new Error("主地址不可用");
+      if (url.includes("api.075700.xyz")) throw new Error("主地址不可用");
       if (url.includes("07571800")) return { primaryApi: "https://new-api.example.com/api.json", backupApi: "https://new-backup.example.com/api.json" };
       return { sources: [{ name: "新版官方源", apiUrl: "https://new-source.example.com/api.php/provide/vod/" }] };
     });
 
-    expect(requested).toEqual(["https://api.075700xyz/api.json", "http://api.07571800.xyz/api.json", "https://new-api.example.com/api.json"]);
+    expect(requested).toEqual(["https://api.075700.xyz/api.json", "http://api.07571800.xyz/api.json", "https://new-api.example.com/api.json"]);
     expect(catalog).toMatchObject({ configUrl: "https://new-api.example.com/api.json", configEndpoints: ["https://new-api.example.com/api.json", "https://new-backup.example.com/api.json"], resources: [{ name: "新版官方源" }] });
   });
 });

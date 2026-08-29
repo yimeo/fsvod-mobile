@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { type SavedMacCmsSource } from "@/lib/vod-storage";
+import { getSourceTypeLabel, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 interface SourceQuickSwitcherProps {
@@ -14,9 +14,9 @@ function getSourceName(source: SavedMacCmsSource): string {
 }
 
 function getHealthLabel(source: SavedMacCmsSource): string {
-  if (source.health === "healthy") return "数据正常";
-  if (source.health === "unhealthy") return source.lastError || "数据验证失败";
-  return "尚未验证数据";
+  if (source.health === "healthy") return "连接正常";
+  if (source.health === "unhealthy") return "连接异常";
+  return "待检测";
 }
 
 export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProps) {
@@ -65,7 +65,7 @@ export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProp
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.title}>快速切换资源</Text>
-                <Text style={styles.subtitle}>必须验证到有效影视数据后才会切换当前资源</Text>
+                <Text style={styles.subtitle}>连接验证通过后才会切换当前资源</Text>
               </View>
               <Pressable accessibilityLabel="关闭" onPress={() => setVisible(false)} style={({ pressed }) => [styles.closeButton, pressed && styles.triggerPressed]}>
                 <Text style={styles.closeText}>×</Text>
@@ -93,11 +93,11 @@ export function SourceQuickSwitcher({ children, style }: SourceQuickSwitcherProp
                     <View style={styles.optionCopy}>
                       <View style={styles.optionNameRow}>
                         <Text numberOfLines={1} style={styles.optionName}>{getSourceName(item)}</Text>
-                        {item.sourceType === "official" ? <Text style={styles.officialTag}>官方</Text> : null}
+                        <Text style={[styles.officialTag, getSourceTypeLabel(item) === "普通" && styles.normalTag]}>{getSourceTypeLabel(item)}</Text>
                       </View>
                       <Text numberOfLines={1} style={[styles.optionStatus, item.health === "unhealthy" && styles.optionStatusUnhealthy]}>{statusLabel}</Text>
                     </View>
-                    {switching ? <ActivityIndicator size="small" color="#FFB84D" /> : active ? <Text style={styles.currentLabel}>当前使用</Text> : <Text style={item.health === "unhealthy" ? styles.errorLabel : styles.chooseLabel}>{item.health === "unhealthy" ? "异常" : item.health === "healthy" ? "选择" : "待验证"}</Text>}
+                    {switching ? <ActivityIndicator size="small" color="#FFB84D" /> : active ? <Text style={styles.currentLabel}>当前使用</Text> : <Text style={item.health === "unhealthy" ? styles.errorLabel : styles.chooseLabel}>{item.health === "unhealthy" ? "异常" : "选择"}</Text>}
                   </Pressable>
                 );
               }}
@@ -130,6 +130,7 @@ const styles = StyleSheet.create({
   optionNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   optionName: { color: "#F0F4F9", fontSize: 14, lineHeight: 20, fontWeight: "900", flexShrink: 1 },
   officialTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  normalTag: { color: "#F6D39A", backgroundColor: "#584222" },
   optionStatus: { color: "#9EB3C9", fontSize: 10, lineHeight: 15, marginTop: 2 },
   optionStatusUnhealthy: { color: "#F0AB91" },
   currentLabel: { color: "#A7E5C0", fontSize: 11, lineHeight: 16, fontWeight: "900" },

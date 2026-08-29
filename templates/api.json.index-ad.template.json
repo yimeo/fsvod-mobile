@@ -1,0 +1,19 @@
+{
+  "primaryApi": "https://api.example.com/api.json",
+  "backupApi": "https://backup.example.com/api.json",
+  "sources": [
+    {
+      "name": "官方主线路",
+      "api": "https://vod.example.com/api.php/provide/vod/"
+    }
+  ],
+  "index_ad": {
+    "enabled": false,
+    "data_url": "https://api.example.com/index_ad.php",
+    "format": "fsvod.index-ad.v1",
+    "timeout_ms": 8000,
+    "cache_seconds": 300,
+    "rotation_seconds": 5,
+    "fallback": "keep_home_hero"
+  }
+}

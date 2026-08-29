@@ -7,7 +7,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { SourceQuickSwitcher } from "@/components/source-quick-switcher";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
-import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, getSourceTypeLabel, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
@@ -15,7 +15,7 @@ const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, child
 export default function CategoriesScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ rootId?: string }>();
-  const { endpoint, sources, categories, isBooting, sourceError, sourceRevision, preferredCategoryId } = useVodSource();
+  const { endpoint, sources, categories, isBooting, sourceError } = useVodSource();
   const [rootId, setRootId] = useState("");
   const [childId, setChildId] = useState("");
   const [items, setItems] = useState<MacCmsVod[]>([]);
@@ -28,13 +28,13 @@ export default function CategoriesScreen() {
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
   const appliedRouteRootId = useRef<string | null>(null);
-  const loadRequestId = useRef(0);
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
   const childChoices = useMemo(() => root.children.length ? [{ id: root.id, name: "全部", parentId: null, children: [] }, ...root.children] : [], [root]);
-  const currentSource = sources.find((source) => source.id === endpoint?.apiUrl || source.endpoint.apiUrl === endpoint?.apiUrl);
+    const currentSource = sources.find((source) => source.id === endpoint?.apiUrl || source.endpoint.apiUrl === endpoint?.apiUrl);
   const sourceCaption = currentSource?.displayName?.trim() || currentSource?.endpoint.inputDomain?.trim() || endpoint?.inputDomain?.trim() || "当前数据源";
+  const sourceTypeLabel = currentSource ? getSourceTypeLabel(currentSource) : "普通";
   const sourceConnectionTone = sourceError ? "unhealthy" : currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
 
   useEffect(() => {
@@ -46,23 +46,11 @@ export default function CategoriesScreen() {
       return;
     }
     if (!requestedRootId) appliedRouteRootId.current = null;
-    const preferredRoot = categories.find((category) => category.id === preferredCategoryId || category.children.some((child) => child.id === preferredCategoryId)) ?? categories[0];
-    if (preferredRoot && !categories.some((category) => category.id === rootId)) {
-      setRootId(preferredRoot.id);
-      setChildId(preferredCategoryId || preferredRoot.id);
+    if (categories.length && !categories.some((category) => category.id === rootId)) {
+      setRootId(categories[0].id);
+      setChildId(categories[0].id);
     }
-  }, [categories, preferredCategoryId, rootId, routeParams.rootId]);
-
-  useEffect(() => {
-    loadRequestId.current += 1;
-    appliedRouteRootId.current = null;
-    setRootId("");
-    setChildId(preferredCategoryId);
-    setItems([]);
-    setPage(1);
-    setPageCount(1);
-    setLoadError(null);
-  }, [preferredCategoryId, sourceRevision]);
+  }, [categories, rootId, routeParams.rootId]);
 
   useFocusEffect(useCallback(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
@@ -73,7 +61,6 @@ export default function CategoriesScreen() {
 
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedTypeId) return;
-    const requestId = ++loadRequestId.current;
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -82,17 +69,28 @@ export default function CategoriesScreen() {
       const result = shouldAggregateChildren
         ? mergeMacCmsPages(await Promise.all([root, ...root.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: category.id }))))
         : await fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: selectedTypeId });
-      if (requestId !== loadRequestId.current) return;
       const pageItems = result.items.slice(0, pageSize);
+      if (!append && pageItems.length === 0) {
+        const currentRootIndex = categories.findIndex((category) => category.id === root.id);
+        const nextCategory = categories.slice(Math.max(0, currentRootIndex + 1)).find((category) => category.id !== root.id);
+        if (nextCategory) {
+          setItems([]);
+          setPage(1);
+          setPageCount(1);
+          setRootId(nextCategory.id);
+          setChildId(nextCategory.id);
+          return;
+        }
+      }
       setItems((current) => append ? [...current, ...pageItems.filter((item) => !current.some((existing) => existing.id === item.id))] : pageItems);
       setPage(result.page);
       setPageCount(result.pageCount);
     } catch (error) {
-      if (requestId === loadRequestId.current) setLoadError(error instanceof Error ? error.message : "分类内容加载失败");
+      setLoadError(error instanceof Error ? error.message : "分类内容加载失败");
     } finally {
-      if (requestId === loadRequestId.current) setIsLoading(false);
+      setIsLoading(false);
     }
-  }, [classicPageSize, endpoint, pageMode, root, selectedTypeId]);
+  }, [categories, classicPageSize, endpoint, pageMode, root, selectedTypeId]);
 
   useEffect(() => { if (selectedTypeId) void loadPage(1); }, [loadPage, selectedTypeId]);
 
@@ -118,7 +116,7 @@ export default function CategoriesScreen() {
 
   const listHeader = <View>
     <Text style={styles.heading}>分类浏览</Text>
-    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></SourceQuickSwitcher></View>
+    <View style={styles.brandSourceRow}><Text style={styles.brandName}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text><Text style={[styles.sourceTypeTag, sourceTypeLabel === "普通" && styles.sourceTypeTagNormal]}>{sourceTypeLabel}</Text></SourceQuickSwitcher></View>
     <View style={styles.sectionHead}><Text style={styles.sectionTitle}>主分类</Text><Text style={styles.sectionMeta}>{categories.length} 个分类</Text></View>
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rootList} renderItem={({ item }) => <CategoryPill label={item.name} active={item.id === root.id} onPress={() => chooseRoot(item.id)} />} />
     {root.children.length ? <><View style={styles.sectionHead}><Text style={styles.sectionTitle}>{root.name}的子分类</Text><Text style={styles.sectionMeta}>{root.children.length} 个子分类</Text></View><FlatList horizontal data={childChoices} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childList} renderItem={({ item }) => <CategoryPill label={item.name} small active={item.id === selectedTypeId} onPress={() => setChildId(item.id)} />} /></> : null}
@@ -152,6 +150,8 @@ const styles = StyleSheet.create({
   brandName: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceIdentity: { flexDirection: "row", alignItems: "center", gap: 7, minWidth: 0, flexShrink: 1 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
+  sourceTypeTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  sourceTypeTagNormal: { color: "#F6D39A", backgroundColor: "#584222" },
   sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },

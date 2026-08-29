@@ -1,0 +1,23 @@
+<?php
+// fsvod-mobile index_ad JSON endpoint.
+// Replace every example value before deployment.
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Access-Control-Allow-Origin: *');
+
+echo json_encode([
+  'format' => 'fsvod.index-ad.v1',
+  'updated_at' => gmdate('c'),
+  'items' => [
+    [
+      'id' => 'notice-001',
+      'title' => '广告标题示例',
+      'subtitle' => '替换为实际广告说明。',
+      'image_url' => 'https://cdn.example.com/ads/notice-001.jpg',
+      'target' => ['type' => 'web', 'url' => 'https://example.com/landing'],
+      'duration_seconds' => 5,
+      'active' => true,
+    ],
+  ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?>

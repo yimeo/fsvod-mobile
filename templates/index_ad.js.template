@@ -1,0 +1,15 @@
+{
+  "format": "fsvod.index-ad.v1",
+  "updated_at": "2026-08-29T00:00:00Z",
+  "items": [
+    {
+      "id": "notice-001",
+      "title": "广告标题示例",
+      "subtitle": "此 .js 文件的内容必须是纯 JSON，不写 JavaScript 代码。",
+      "image_url": "https://cdn.example.com/ads/notice-001.jpg",
+      "target": { "type": "web", "url": "https://example.com/landing" },
+      "duration_seconds": 5,
+      "active": true
+    }
+  ]
+}
