@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   sourceIdentity: { flexDirection: "row", alignItems: "center", gap: 7, minWidth: 0, flexShrink: 1 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
   sourceTypeTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  sourceTypeTagNormal: { color: "#F6D39A", backgroundColor: "#584222" },
+  sourceTypeTagNormal: { color: "#D6DCE6", backgroundColor: "#4A5568" },
   sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },

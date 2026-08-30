@@ -62,11 +62,16 @@ function formatPlaybackRate(rate: number): string {
   return Number.isInteger(rate) ? String(rate) : String(rate).replace(/0+$/, "").replace(/\.$/, "");
 }
 
+function isShortDramaType(typeName: string, title: string): boolean {
+  return /短剧|微短剧|短视频|竖屏/i.test(`${typeName} ${title}`);
+}
+
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{
     url: string;
     episodeUrl?: string;
     title?: string;
+    contentType?: string;
     episode?: string;
     source?: string;
     offline?: string;
@@ -80,6 +85,8 @@ export default function PlayerScreen() {
   const router = useRouter();
   const routeUrl = getParam(params.url);
   const title = getParam(params.title, "影片播放");
+  const contentType = getParam(params.contentType);
+  const fullscreenOrientation = isShortDramaType(contentType, title) ? "portrait" : "landscape";
   const routeEpisode = getParam(params.episode);
   const routeSource = getParam(params.source);
   const vodId = getParam(params.vodId);
@@ -430,8 +437,7 @@ export default function PlayerScreen() {
                       style={styles.video}
                       player={player}
                       nativeControls
-                      fullscreenOptions={{ enable: true, orientation: "landscape", autoExitOnRotate: true }}
-                      allowsPictureInPicture
+                      fullscreenOptions={{ enable: true, orientation: fullscreenOrientation, autoExitOnRotate: true }}
                       contentFit="contain"
                       surfaceType="textureView"
                       useExoShutter

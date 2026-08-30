@@ -9,7 +9,7 @@ import {
   type MacCmsEndpoint,
   type MacCmsVod,
 } from "@/lib/maccms";
-import { getOfficialResourceSyncState, OFFICIAL_RESOURCE_CONFIG_URLS, OFFICIAL_RESOURCE_SYNC_INTERVAL_MS, syncOfficialResourceCatalog, type OfficialResourceSyncResult, type OfficialResourceSyncState } from "@/lib/official-resources";
+import { getOfficialResourceSyncState, OFFICIAL_RESOURCE_CONFIG_URLS, syncOfficialResourceCatalog, type OfficialResourceSyncResult, type OfficialResourceSyncState } from "@/lib/official-resources";
 import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, replaceSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { toChineseNetworkError } from "@/lib/network-error";
 
@@ -138,11 +138,14 @@ export function VodProvider({ children }: { children: ReactNode }) {
             setCategories(buildCategoryTree([page.raw], page.items));
           } catch (error) {
             setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
+            // Only refresh the official primary/backup catalog when the
+            // currently selected source has failed. Normal app navigation
+            // and restarts use the locally cached source list.
+            await syncOfficialResources(true);
           } finally {
             setIsBooting(false);
           }
         })();
-        void syncOfficialResources();
       } else {
         void (async () => {
           // On a first install, the first source returned by the official
@@ -165,11 +168,6 @@ export function VodProvider({ children }: { children: ReactNode }) {
     };
     void bootstrap();
   }, [activateFirstAvailableSource, syncOfficialResources]);
-
-  useEffect(() => {
-    const interval = setInterval(() => { void syncOfficialResources(); }, OFFICIAL_RESOURCE_SYNC_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [syncOfficialResources]);
 
   const configureSource = useCallback(async (address: string, displayName?: string) => {
     const catalog = await discoverMacCms(address);

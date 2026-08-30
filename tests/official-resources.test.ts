@@ -45,4 +45,18 @@ describe("官方资源配置", () => {
     expect(requested).toEqual(["https://api.075700.xyz/api.json", "http://api.07571800.xyz/api.json", "https://new-api.example.com/api.json"]);
     expect(catalog).toMatchObject({ configUrl: "https://new-api.example.com/api.json", configEndpoints: ["https://new-api.example.com/api.json", "https://new-backup.example.com/api.json"], resources: [{ name: "新版官方源" }] });
   });
+
+  it("已有更新后的主备地址时优先读取新主地址", async () => {
+    const requested: string[] = [];
+    const catalog = await loadOfficialResourceCatalog([
+      "https://new-api.example.com/api.json",
+      "https://new-backup.example.com/api.json",
+    ], async (url) => {
+      requested.push(url);
+      return { sources: [{ name: "持久化新版官方源", apiUrl: "https://source.example.com/api.php/provide/vod/" }] };
+    });
+
+    expect(requested[0]).toBe("https://new-api.example.com/api.json");
+    expect(catalog.resources[0]?.name).toBe("持久化新版官方源");
+  });
 });

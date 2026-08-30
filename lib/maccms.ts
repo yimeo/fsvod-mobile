@@ -122,7 +122,7 @@ function addQuery(apiUrl: string, params: Record<string, string | number | undef
 
 async function getJson(url: string): Promise<RecordValue> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000);
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(url, {
       headers: { Accept: "application/json, text/plain, */*" },

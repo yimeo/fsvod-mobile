@@ -24,6 +24,15 @@ export interface IndexAdLoadResult {
   rotationSeconds: number;
 }
 
+// Intentionally in-memory: it survives navigation within one APP process but
+// is cleared when the APP is fully exited and started again.
+let sessionAdResult: IndexAdLoadResult | null = null;
+let sessionAdRequest: Promise<IndexAdLoadResult> | null = null;
+
+export function getCachedIndexAds(): IndexAdLoadResult | null {
+  return sessionAdResult;
+}
+
 interface IndexAdConfig {
   dataUrl: string;
   rotationSeconds: number;
@@ -144,12 +153,20 @@ async function findIndexAdConfig(configUrls: readonly string[]): Promise<IndexAd
  * Returns only validated ad data. Remote JavaScript is never evaluated; an endpoint ending in .js is accepted only when it returns JSON.
  */
 export async function loadIndexAds(configUrls: readonly string[] = OFFICIAL_RESOURCE_CONFIG_URLS): Promise<IndexAdLoadResult> {
-  const config = await findIndexAdConfig(configUrls);
-  if (!config) return { ads: [], rotationSeconds: 5 };
-  try {
-    const ads = parseIndexAdResponse(await requestJson(config.dataUrl), config.rotationSeconds);
-    return { ads, rotationSeconds: config.rotationSeconds };
-  } catch {
-    return { ads: [], rotationSeconds: config.rotationSeconds };
-  }
+  if (sessionAdResult) return sessionAdResult;
+  if (sessionAdRequest) return sessionAdRequest;
+  sessionAdRequest = (async () => {
+    const config = await findIndexAdConfig(configUrls);
+    if (!config) return { ads: [], rotationSeconds: 5 };
+    try {
+      const ads = parseIndexAdResponse(await requestJson(config.dataUrl), config.rotationSeconds);
+      return { ads, rotationSeconds: config.rotationSeconds };
+    } catch {
+      return { ads: [], rotationSeconds: config.rotationSeconds };
+    }
+  })();
+  const result = await sessionAdRequest;
+  sessionAdRequest = null;
+  if (result.ads.length > 0) sessionAdResult = result;
+  return result;
 }

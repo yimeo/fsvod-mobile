@@ -218,8 +218,11 @@ export async function syncOfficialResourceCatalog(force = false): Promise<Offici
   }
 
   try {
-    // Put the current official pair first so an older persisted endpoint group cannot block updates.
-    const catalog = await loadOfficialResourceCatalog([...DEFAULT_OFFICIAL_CONFIG_ENDPOINTS, ...previous.configEndpoints]);
+    // Once the backup has supplied a new primary/backup pair, keep only that
+    // pair. The built-in pair is used only when no persisted configuration
+    // exists (first install); old defaults must not be retained or retried.
+    const preferredEndpoints = previous.configEndpoints.length ? previous.configEndpoints : [...DEFAULT_OFFICIAL_CONFIG_ENDPOINTS];
+    const catalog = await loadOfficialResourceCatalog(preferredEndpoints);
     const resourceSignature = signatureFor(catalog.resources);
     const state: OfficialResourceSyncState = {
       configUrl: catalog.configUrl,
