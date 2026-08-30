@@ -173,7 +173,7 @@ export default function HomeScreen() {
     setActiveAdIndex(0);
   }, []);
 
-  if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#FFB84D" size="large" /></ScreenContainer>;
+  if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><View style={styles.bootScreen}><Image source={require("@/assets/images/icon.png")} style={styles.bootIcon} contentFit="cover" /><Text style={styles.bootBrand}>飞鸿影院</Text><ActivityIndicator color="#FFB84D" size="large" /><Text style={styles.bootTitle}>正在连接官方数据源</Text><Text style={styles.bootHint}>FSVOD启动正在加载分类，请稍候…</Text></View></ScreenContainer>;
   if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><Image source={require("@/assets/images/icon.png")} style={styles.emptyIcon} contentFit="cover" /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
 
   const listHeader = <View>
@@ -199,6 +199,11 @@ function formatDuration(seconds: number): string {
 }
 
 const styles = StyleSheet.create({
+  bootScreen: { alignItems: "center", justifyContent: "center", paddingBottom: 70 },
+  bootIcon: { width: 84, height: 84, borderRadius: 24, marginBottom: 14 },
+  bootBrand: { color: "#F5B64B", fontSize: 22, lineHeight: 30, fontWeight: "900", marginBottom: 24 },
+  bootTitle: { color: "#E8EDF5", fontSize: 15, lineHeight: 22, fontWeight: "800", marginTop: 18 },
+  bootHint: { color: "#8E9AB0", fontSize: 11, lineHeight: 17, marginTop: 5 },
   content: { paddingHorizontal: 18, paddingBottom: 34 },
   appHeader: { height: 70, paddingTop: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headerIdentity: { flex: 1, minWidth: 0, paddingRight: 12 },

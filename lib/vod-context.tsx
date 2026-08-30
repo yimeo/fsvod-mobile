@@ -105,7 +105,10 @@ export function VodProvider({ children }: { children: ReactNode }) {
     for (const candidate of candidates) {
       try {
         const page = await fetchVodPage(candidate.endpoint, { page: 1 });
-        const nextCategories = await visibleCategories(candidate.endpoint, page.raw, page.items);
+        // The initial list response already contains the category tree. Avoid
+        // probing every category here; Home will load its selected category
+        // immediately after activation, which removes a large startup delay.
+        const nextCategories = buildCategoryTree([page.raw], page.items);
         if (nextCategories.length === 0) throw new Error("该数据源没有可浏览的分类数据");
         await saveEndpoint(candidate.endpoint);
         setEndpoint(candidate.endpoint);
@@ -128,14 +131,15 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setSources(savedSources);
       setOfficialResourceSync(savedOfficialResourceSync);
       if (savedEndpoint) {
-        setIsBooting(false);
         setEndpoint(savedEndpoint);
         void (async () => {
           try {
             const page = await fetchVodPage(savedEndpoint, { page: 1 });
-            setCategories(await visibleCategories(savedEndpoint, page.raw, page.items));
+            setCategories(buildCategoryTree([page.raw], page.items));
           } catch (error) {
             setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
+          } finally {
+            setIsBooting(false);
           }
         })();
         void syncOfficialResources();

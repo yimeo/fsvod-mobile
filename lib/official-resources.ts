@@ -146,7 +146,7 @@ export function parseOfficialResourceConfig(payload: unknown): { primaryApi: str
 
 async function requestOfficialConfig(url: string): Promise<unknown> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
+  const timeout = setTimeout(() => controller.abort(), 4_000);
   try {
     const response = await fetch(url, { headers: { Accept: "application/json, text/plain, */*" }, signal: controller.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
