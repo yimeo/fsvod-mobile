@@ -35,6 +35,7 @@ export default function SettingsScreen() {
   const [newSourceAddress, setNewSourceAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [switchingSourceId, setSwitchingSourceId] = useState<string | null>(null);
   const [isOfficialSyncing, setIsOfficialSyncing] = useState(false);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [sourceDisplayName, setSourceDisplayName] = useState("");
@@ -112,9 +113,28 @@ export default function SettingsScreen() {
   };
 
   const runCheck = async (id: string) => {
+    if (isSaving || switchingSourceId) return;
     setCheckingId(id);
-    await checkSource(id);
-    setCheckingId(null);
+    setMessage("正在检测数据源连接，请稍候…");
+    try {
+      await checkSource(id);
+      setMessage("数据源检测完成。");
+    } finally {
+      setCheckingId(null);
+    }
+  };
+
+  const runSwitch = async (id: string) => {
+    if (isSaving || checkingId || switchingSourceId || endpoint?.apiUrl === id) return;
+    const source = sources.find((item) => item.id === id);
+    setSwitchingSourceId(id);
+    setMessage(`正在验证并切换到“${source?.displayName || "数据源"}”，请稍候…`);
+    try {
+      const switched = await switchSource(id);
+      setMessage(switched ? `已切换到“${source?.displayName || "数据源"}”。` : "数据源连接失败，已保留当前数据源。");
+    } finally {
+      setSwitchingSourceId(null);
+    }
   };
 
   const runOfficialSync = async () => {
@@ -135,6 +155,7 @@ export default function SettingsScreen() {
   };
 
   const beginRename = (source: SavedMacCmsSource) => {
+    if (isSaving || checkingId || switchingSourceId) return;
     setEditingSourceId(source.id);
     setSourceDisplayName(source.displayName);
     setSourceAddress(source.endpoint.apiUrl);
@@ -208,15 +229,15 @@ export default function SettingsScreen() {
                 <View style={styles.editForm}>
                   <TextInput value={sourceDisplayName} onChangeText={setSourceDisplayName} autoFocus autoCorrect={false} returnKeyType="next" placeholder="数据源名称" placeholderTextColor="#71809B" style={styles.renameInput} />
                   <TextInput value={sourceAddress} onChangeText={setSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void saveSourceEdits(source.id)} placeholder="数据源地址" placeholderTextColor="#71809B" style={styles.renameInput} />
-                  <View style={styles.editActions}><Pressable disabled={isSaving} onPress={() => void saveSourceEdits(source.id)} style={({ pressed }) => [styles.renameSave, (pressed || isSaving) && styles.pressed]}>{isSaving ? <ActivityIndicator color="#10182B" size="small" /> : <Text style={styles.renameSaveText}>保存并识别</Text>}</Pressable><Pressable onPress={() => setEditingSourceId(null)} style={({ pressed }) => [styles.renameCancel, pressed && styles.pressed]}><Text style={styles.miniActionText}>取消</Text></Pressable></View>
+                  <View style={styles.editActions}><Pressable disabled={isSaving} onPress={() => void saveSourceEdits(source.id)} style={({ pressed }) => [styles.renameSave, (pressed || isSaving) && styles.pressed]}>{isSaving ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#10182B" size="small" /><Text style={styles.renameSaveText}>正在识别…</Text></View> : <Text style={styles.renameSaveText}>保存并识别</Text>}</Pressable><Pressable disabled={isSaving} onPress={() => setEditingSourceId(null)} style={({ pressed }) => [styles.renameCancel, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.miniActionText}>取消</Text></Pressable></View>
                 </View>
               ) : (
                 <View style={styles.sourceTop}>
-                  <Pressable onPress={() => void switchSource(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed]}>
+                  <Pressable disabled={Boolean(isSaving || checkingId || switchingSourceId)} onPress={() => void runSwitch(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed, switchingSourceId === source.id && styles.sourceMainBusy]}>
                     <View style={[styles.sourceMark, source.health === "healthy" && styles.sourceMarkHealthy, source.health === "unhealthy" && styles.sourceMarkUnhealthy]}><View style={[styles.sourceMarkDot, source.health === "healthy" && styles.sourceMarkDotHealthy, source.health === "unhealthy" && styles.sourceMarkDotUnhealthy]} /></View>
-                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text style={[styles.sourceOfficialTag, getSourceTypeLabel(source) === "普通" && styles.sourceNormalTag]}>{getSourceTypeLabel(source)}</Text></View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? toChineseNetworkError(source.lastError, "连接异常，请稍后重试") : "尚未检测"}{source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text style={[styles.sourceOfficialTag, getSourceTypeLabel(source) === "普通" && styles.sourceNormalTag]}>{getSourceTypeLabel(source)}</Text></View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{switchingSourceId === source.id ? "正在验证连接并切换，请稍候…" : source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? toChineseNetworkError(source.lastError, "连接异常，请稍后重试") : "尚未检测"}{!switchingSourceId && source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
                   </Pressable>
-                  <Pressable accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed]}><Text style={styles.editSourceGlyph}>✎</Text></Pressable>
+                  <Pressable disabled={Boolean(isSaving || checkingId || switchingSourceId)} accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed, Boolean(isSaving || checkingId || switchingSourceId) && styles.disabled]}>{switchingSourceId === source.id ? <ActivityIndicator size="small" color="#F5C36B" /> : <Text style={styles.editSourceGlyph}>✎</Text>}</Pressable>
                 </View>
               )}
               <View style={styles.sourceActions}>
@@ -250,7 +271,7 @@ export default function SettingsScreen() {
         <View style={styles.versionFooter}><Text style={styles.versionText}>fsvod-mobile-1.3.4</Text><Text style={styles.versionHint}>Android 独立侧载版</Text></View>
       </ScrollView>
       <Modal visible={isAddModalVisible} transparent animationType="fade" onRequestClose={() => setIsAddModalVisible(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeading}><View><Text style={styles.modalTitle}>添加资源</Text><Text style={styles.modalSubtitle}>名称和地址都可以随时编辑</Text></View><Pressable onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}><Text style={styles.modalCloseText}>×</Text></Pressable></View><Text style={styles.label}>数据源名称</Text><TextInput value={newSourceName} onChangeText={setNewSourceName} autoCorrect={false} returnKeyType="next" placeholder="可选，例如：主线路" placeholderTextColor="#71809B" style={styles.input} /><Text style={styles.fieldHint}>留空时自动使用域名，例如 example.com。</Text><Text style={[styles.label, styles.addressLabel]}>数据源地址</Text><TextInput value={newSourceAddress} onChangeText={setNewSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} /><View style={styles.modalActions}><Pressable onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalCancel, pressed && styles.pressed]}><Text style={styles.modalCancelText}>取消</Text></Pressable><Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.modalConfirm, (pressed || isSaving) && styles.pressed]}>{isSaving ? <ActivityIndicator color="#10182B" size="small" /> : <Text style={styles.modalConfirmText}>添加并识别</Text>}</Pressable></View></View></View>
+        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeading}><View><Text style={styles.modalTitle}>添加资源</Text><Text style={styles.modalSubtitle}>{isSaving ? "正在连接并识别数据源，请稍候…" : "名称和地址都可以随时编辑"}</Text></View><Pressable disabled={isSaving} onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.modalCloseText}>×</Text></Pressable></View><Text style={styles.label}>数据源名称</Text><TextInput editable={!isSaving} value={newSourceName} onChangeText={setNewSourceName} autoCorrect={false} returnKeyType="next" placeholder="可选，例如：主线路" placeholderTextColor="#71809B" style={styles.input} /><Text style={styles.fieldHint}>留空时自动使用域名，例如 example.com。</Text><Text style={[styles.label, styles.addressLabel]}>数据源地址</Text><TextInput editable={!isSaving} value={newSourceAddress} onChangeText={setNewSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} /><View style={styles.modalActions}><Pressable disabled={isSaving} onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalCancel, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.modalCancelText}>取消</Text></Pressable><Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.modalConfirm, (pressed || isSaving) && styles.pressed]}>{isSaving ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#10182B" size="small" /><Text style={styles.modalConfirmText}>正在识别…</Text></View> : <Text style={styles.modalConfirmText}>添加并识别</Text>}</Pressable></View></View></View>
       </Modal>
     </ScreenContainer>
   );
@@ -339,6 +360,7 @@ const styles = StyleSheet.create({
   sourceItemActive: { borderColor: "#D99D40", backgroundColor: "#171D2D" },
   sourceTop: { flexDirection: "row", alignItems: "center", gap: 11 },
   sourceMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: 11, minWidth: 0 },
+  sourceMainBusy: { opacity: 0.72 },
   sourceMark: { width: 42, height: 42, borderRadius: 13, justifyContent: "center", alignItems: "center", backgroundColor: "#27334A", borderWidth: 1, borderColor: "#394964" },
   sourceMarkHealthy: { backgroundColor: "#143A31", borderColor: "#317360" },
   sourceMarkUnhealthy: { backgroundColor: "#37262C", borderColor: "#784A4E" },
