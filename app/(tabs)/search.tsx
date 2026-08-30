@@ -6,7 +6,7 @@ import { useCallback, useRef, useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, type MacCmsVod } from "@/lib/maccms";
-import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, rememberSearch, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, getSearches, rememberSearch, removeSearch, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 export default function SearchScreen() {
@@ -21,6 +21,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pageMode, setPageMode] = useState<CategoryPageMode>("auto");
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
 
   useFocusEffect(useCallback(() => {
@@ -28,6 +29,7 @@ export default function SearchScreen() {
       setPageMode(mode);
       setClassicPageSize(size);
     });
+    void getSearches().then((values) => setRecentSearches(values.slice(0, 10)));
   }, []));
 
   const loadPage = useCallback(async (keyword: string, requestedPage: number, append = false) => {
@@ -57,7 +59,13 @@ export default function SearchScreen() {
     setPage(1);
     setPageCount(1);
     await Promise.all([loadPage(keyword, 1), rememberSearch(keyword)]);
+    setRecentSearches((current) => [keyword, ...current.filter((item) => item !== keyword)].slice(0, 10));
   }, [endpoint, loadPage, query]);
+
+  const deleteRecentSearch = async (keyword: string) => {
+    const next = await removeSearch(keyword);
+    setRecentSearches(next.slice(0, 10));
+  };
 
   const goToClassicPage = (targetPage: number) => {
     if (isLoading || !submittedQuery || targetPage < 1 || targetPage > pageCount || targetPage === page) return;
@@ -69,7 +77,7 @@ export default function SearchScreen() {
     return <ScreenContainer className="px-6 pt-8" containerClassName="bg-background"><View style={styles.empty}><Text style={styles.emptyTitle}>尚未配置数据源</Text><Text style={styles.emptyText}>请先在设置中填写 MACCMS 站点域名。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.configButton, pressed && styles.pressed]}><Text style={styles.configText}>前往设置</Text></Pressable></View></ScreenContainer>;
   }
 
-  const listHeader = <View><Text style={styles.eyebrow}>DISCOVER</Text><Text style={styles.heading}>搜索影片</Text><Text style={styles.lead}>片名、演员、关键词，快速找到想看的作品。</Text><View style={styles.searchBox}><TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => void search()} placeholder="输入片名、演员或关键词" placeholderTextColor="#7A879F" style={styles.input} returnKeyType="search" /><Pressable accessibilityRole="button" accessibilityLabel="提交搜索" onPress={() => void search()} style={({ pressed }) => [styles.submit, pressed && styles.pressed]}><Text style={styles.submitText}>搜索</Text></Pressable></View>{error ? <Text style={styles.error}>{error}</Text> : null}{submittedQuery ? <Text style={styles.resultText}>“{submittedQuery}” 的搜索结果</Text> : <Text style={styles.hint}>输入关键词，查看当前数据源中可用的影视内容。</Text>}</View>;
+  const listHeader = <View><Text style={styles.eyebrow}>DISCOVER</Text><Text style={styles.heading}>搜索影片</Text><Text style={styles.lead}>片名、演员、关键词，快速找到想看的作品。</Text><View style={styles.searchBox}><TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => void search()} placeholder="输入片名、演员或关键词" placeholderTextColor="#7A879F" style={styles.input} returnKeyType="search" /><Pressable accessibilityRole="button" accessibilityLabel="提交搜索" onPress={() => void search()} style={({ pressed }) => [styles.submit, pressed && styles.pressed]}><Text style={styles.submitText}>搜索</Text></Pressable></View>{recentSearches.length ? <View style={styles.recentSection}><Text style={styles.recentTitle}>最近搜过的词</Text><View style={styles.recentList}>{recentSearches.map((keyword) => <View key={keyword} style={styles.recentChip}><Pressable onPress={() => { setQuery(keyword); void search(keyword); }} style={({ pressed }) => [styles.recentUse, pressed && styles.pressed]}><Text numberOfLines={1} style={styles.recentText}>{keyword.length > 12 ? `${keyword.slice(0, 12)}…` : keyword}</Text></Pressable><Pressable accessibilityLabel={`删除最近搜索 ${keyword}`} onPress={() => void deleteRecentSearch(keyword)} style={({ pressed }) => [styles.recentDelete, pressed && styles.pressed]}><Text style={styles.recentDeleteText}>×</Text></Pressable></View>)}</View></View> : null}{error ? <Text style={styles.error}>{error}</Text> : null}{submittedQuery ? <Text style={styles.resultText}>“{submittedQuery}” 的搜索结果</Text> : <Text style={styles.hint}>输入关键词，查看当前数据源中可用的影视内容。</Text>}</View>;
   const footer = isLoading
     ? <View style={styles.footer}><ActivityIndicator color="#F5B64B" /></View>
     : submittedQuery && pageMode === "classic" && pageCount > 1
@@ -104,6 +112,14 @@ const styles = StyleSheet.create({
   input: { flex: 1, color: "#F6F7FB", fontSize: 14, lineHeight: 20, paddingVertical: 0, paddingRight: 10 },
   submit: { backgroundColor: "#F5B64B", height: 37, justifyContent: "center", paddingHorizontal: 14, borderRadius: 10, marginRight: 6 },
   submitText: { color: "#11192B", fontWeight: "800", fontSize: 13 },
+  recentSection: { marginTop: 15, marginBottom: 2 },
+  recentTitle: { color: "#AAB6C8", fontSize: 11, lineHeight: 16, fontWeight: "800", marginBottom: 8 },
+  recentList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  recentChip: { flexDirection: "row", alignItems: "center", maxWidth: "100%", borderRadius: 9, backgroundColor: "#18243A", borderWidth: 1, borderColor: "#2D3E5A" },
+  recentUse: { paddingVertical: 7, paddingLeft: 10, paddingRight: 5, maxWidth: 180 },
+  recentText: { color: "#D4DDEA", fontSize: 12, lineHeight: 16 },
+  recentDelete: { width: 25, height: 29, alignItems: "center", justifyContent: "center" },
+  recentDeleteText: { color: "#8190A7", fontSize: 17, lineHeight: 20 },
   hint: { color: "#9CA7BE", fontSize: 12, lineHeight: 18, marginTop: 12, marginBottom: 18 },
   resultText: { color: "#C9D1E1", fontSize: 13, lineHeight: 19, marginTop: 13, marginBottom: 18 },
   error: { color: "#F8C174", fontSize: 12, lineHeight: 18, marginTop: 10 },

@@ -180,13 +180,19 @@ export async function rememberSearch(keyword: string): Promise<string[]> {
   const normalized = keyword.trim();
   if (!normalized) return getSearches();
   const searches = await getSearches();
-  const next = [normalized, ...searches.filter((item) => item !== normalized)].slice(0, 12);
+  const next = [normalized, ...searches.filter((item) => item !== normalized)].slice(0, 10);
   await AsyncStorage.setItem(SEARCH_KEY, JSON.stringify(next));
   return next;
 }
 
 export function getSearches(): Promise<string[]> {
   return getJson<string[]>(SEARCH_KEY, []);
+}
+
+export async function removeSearch(value: string): Promise<string[]> {
+  const next = (await getSearches()).filter((item) => item !== value);
+  await AsyncStorage.setItem(SEARCH_KEY, JSON.stringify(next));
+  return next;
 }
 
 export function getCategoryOrder(): Promise<string[]> {

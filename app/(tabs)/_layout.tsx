@@ -46,7 +46,7 @@ export default function TabLayout() {
         name="categories"
         options={{
           title: "分类",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="square.grid.2x2.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="film.fill" color={color} />,
         }}
       />
       <Tabs.Screen
