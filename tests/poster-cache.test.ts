@@ -58,4 +58,12 @@ describe("海报缓存统计", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
   });
+
+  it("统计时不自动删除暂时找不到文件的海报索引", async () => {
+    const url = "https://poster.example.com/temporarily-unavailable.jpg";
+    storage.set("fsvod:poster-cache-urls", JSON.stringify([url]));
+
+    await expect(getPosterCacheSummary()).resolves.toEqual({ count: 1, bytes: 0 });
+    expect(JSON.parse(storage.get("fsvod:poster-cache-urls") ?? "[]")).toEqual([url]);
+  });
 });

@@ -1,4 +1,4 @@
-import { ActivityIndicator, FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image } from "expo-image";
@@ -39,6 +39,9 @@ export default function HomeScreen() {
   useEffect(() => { void getWatchHistory().then(setHistory); }, []);
 
   useEffect(() => {
+    // Load the official api.json data source first. Ads are non-critical and
+    // must never compete with the initial catalogue request for startup time.
+    if (isBooting || !endpoint || isLoading || (!categories.length && !sourceError)) return;
     let active = true;
     const delay = setTimeout(() => {
       void loadIndexAds().then(({ ads }) => {
@@ -49,7 +52,7 @@ export default function HomeScreen() {
       });
     }, 1_200);
     return () => { active = false; clearTimeout(delay); };
-  }, []);
+  }, [categories.length, endpoint, isBooting, isLoading, sourceError]);
 
   const displayAds = useMemo(() => indexAds.filter((ad) => !failedAdIds.includes(ad.id)), [failedAdIds, indexAds]);
   const activeAd = displayAds.length ? displayAds[activeAdIndex % displayAds.length] : null;
@@ -146,16 +149,23 @@ export default function HomeScreen() {
   };
 
   const openIndexAd = useCallback(async () => {
-    if (!activeAd?.target) return;
-    if (activeAd.target.type === "vod") {
-      router.push({ pathname: "/vod/[id]", params: { id: activeAd.target.vodId } } as never);
+    const target = activeAd?.target;
+    if (!target) return;
+    if (target.type === "vod") {
+      router.push({ pathname: "/vod/[id]", params: { id: target.vodId } } as never);
       return;
     }
-    try {
-      if (await Linking.canOpenURL(activeAd.target.url)) await Linking.openURL(activeAd.target.url);
-    } catch {
-      // A failed advert link must not interfere with the home page or its fallback card.
-    }
+    const externalUrl = target.url;
+    Alert.alert("转向外部网页", "请使用手机默认浏览器打开外部网址访问", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "打开浏览器",
+        onPress: () => {
+          // Linking.openURL delegates directly to the device's default browser.
+          void Linking.openURL(externalUrl).catch(() => undefined);
+        },
+      },
+    ]);
   }, [activeAd, router]);
 
   const markAdImageFailed = useCallback((id: string) => {
@@ -164,15 +174,15 @@ export default function HomeScreen() {
   }, []);
 
   if (isBooting) return <ScreenContainer containerClassName="bg-background" className="items-center justify-center"><ActivityIndicator color="#FFB84D" size="large" /></ScreenContainer>;
-  if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><VodPoster title="飞鸿影院" url={null} style={styles.emptyIcon} /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
+  if (!endpoint) return <ScreenContainer className="px-6" containerClassName="bg-background"><View style={styles.emptyHero}><Image source={require("@/assets/images/icon.png")} style={styles.emptyIcon} contentFit="cover" /><Text style={styles.emptyBrand}>飞鸿影院</Text><Text style={styles.emptyTitle}>接入你的影视数据源</Text><Text style={styles.emptyText}>填入 MACCMS 站点域名后，即可浏览你喜爱的作品。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={styles.primaryButtonText}>配置数据源</Text></Pressable></View></ScreenContainer>;
 
   const listHeader = <View>
     <View style={styles.appHeader}><View style={styles.headerIdentity}><Text style={styles.brandName}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceMetaRow}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text>{endpoint ? <Text style={[styles.sourceTypeTag, sourceTypeLabel === "普通" && styles.sourceTypeTagNormal]}>{sourceTypeLabel}</Text> : null}</SourceQuickSwitcher></View><Pressable accessibilityRole="button" accessibilityLabel="打开搜索" onPress={() => router.push("/search" as never)} style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}><Text style={styles.searchIcon}>⌕</Text></Pressable></View>
-    {activeAd ? <Pressable accessibilityRole="button" accessibilityLabel={`打开广告：${activeAd.title}`} onPress={() => void openIndexAd()} style={({ pressed }) => [styles.heroCard, styles.adHeroCard, pressed && styles.pressed]}><Image source={{ uri: activeAd.imageUrl }} style={styles.adImage} contentFit="cover" transition={180} onError={() => markAdImageFailed(activeAd.id)} /><View style={styles.adScrim} /><View style={styles.adContent}><Text style={styles.adKicker}>推广</Text><Text numberOfLines={2} style={styles.heroTitle}>{activeAd.title}</Text>{activeAd.subtitle ? <Text numberOfLines={2} style={styles.heroText}>{activeAd.subtitle}</Text> : null}<View style={styles.adAction}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>{activeAd.target ? "查看详情" : "精彩推荐"}</Text></View></View>{displayAds.length > 1 ? <View style={styles.adPagination}>{displayAds.map((ad, index) => <Pressable key={ad.id} accessibilityLabel={`切换至广告 ${index + 1}`} onPress={() => setActiveAdIndex(index)} style={[styles.adDot, index === activeAdIndex % displayAds.length && styles.adDotActive]} />)}</View> : null}</Pressable> : <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>}
+    {activeAd ? <Pressable accessibilityRole="button" accessibilityLabel={activeAd.target ? `打开广告：${activeAd.title}` : `广告：${activeAd.title}`} onPress={activeAd.target ? () => void openIndexAd() : undefined} style={({ pressed }) => [styles.heroCard, styles.adHeroCard, pressed && activeAd.target && styles.pressed]}><Image source={{ uri: activeAd.imageUrl }} style={styles.adImage} contentFit="cover" transition={180} onError={() => markAdImageFailed(activeAd.id)} /><View style={styles.adScrim} /><View style={styles.adContent}><Text style={styles.adKicker}>推广</Text><Text numberOfLines={2} style={styles.heroTitle}>{activeAd.title}</Text>{activeAd.subtitle ? <Text numberOfLines={2} style={styles.heroText}>{activeAd.subtitle}</Text> : null}</View>{displayAds.length > 1 ? <View style={styles.adPagination}>{displayAds.map((ad, index) => <Pressable key={ad.id} accessibilityLabel={`切换至广告 ${index + 1}`} onPress={() => setActiveAdIndex(index)} style={[styles.adDot, index === activeAdIndex % displayAds.length && styles.adDotActive]} />)}</View> : null}</Pressable> : <View style={styles.heroCard}><View style={styles.heroOrb} /><Text style={styles.heroKicker}>现在开始</Text><Text style={styles.heroTitle}>发现下一部{`\n`}值得观看的作品</Text><Text style={styles.heroText}>以精选分区和持续更新的内容，打造简洁专注的观影入口。</Text><Pressable onPress={() => router.navigate("/categories" as never)} style={({ pressed }) => [styles.heroAction, pressed && styles.pressed]}><Text style={styles.heroActionIcon}>▶</Text><Text style={styles.heroActionText}>开始浏览</Text></Pressable></View>}
     {sourceError ? <View style={styles.warning}><Text style={styles.warningText}>{items.length ? "网络不可用，正在展示本地已缓存内容。请尝试更换数据源。" : "网络不可用，暂时无法加载内容。请尝试更换数据源。"}</Text></View> : null}
     <FlatList horizontal data={categories} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList} renderItem={({ item }) => <CategoryChip label={item.name} active={item.id === selectedRoot.id} onPress={() => chooseRoot(item.id)} />} />
     {latestHistory ? <View style={styles.continueSection}><View style={styles.continueHeading}><View><Text style={styles.sectionTitle}>继续观看</Text><Text style={styles.sectionSubtitle}>从上次离开的地方继续</Text></View><Pressable onPress={() => router.push("/history" as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View><Pressable onPress={() => void resumeHistory(latestHistory)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}><VodPoster title={latestHistory.name} url={latestHistory.posterUrl} style={styles.continuePoster} /><View style={styles.continueInfo}><Text numberOfLines={2} style={styles.continueTitle}>{latestHistory.name}</Text><Text numberOfLines={1} style={styles.continueMeta}>{latestHistory.episodeName || "影视内容"}{latestHistory.positionSeconds ? ` · ${formatDuration(latestHistory.positionSeconds)}` : ""}</Text><View style={styles.continueLine}><View style={[styles.continueProgress, { width: `${continueProgress}%` }]} /></View></View></Pressable></View> : null}
-    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable accessibilityLabel={`查看${selectedRoot.name || "电影"}更多影片`} onPress={() => router.navigate({ pathname: "/categories", params: { rootId: selectedRoot.id } } as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
+    <View style={styles.contentHeading}><View><Text style={styles.sectionTitle}>正在热映{selectedRoot.name}</Text><Text style={styles.sectionSubtitle}>来自当前数据源的最新内容</Text></View><Pressable accessibilityLabel={`查看${selectedRoot.name || "电影"}更多影片`} onPress={() => router.navigate({ pathname: "/categories", params: { rootId: selectedRoot.id } } as never)} style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}><Text style={styles.moreText}>更多 ›</Text></Pressable></View>
     {loadError ? <Text style={styles.loadError}>{loadError}</Text> : null}
   </View>;
 
@@ -196,7 +206,7 @@ const styles = StyleSheet.create({
   sourceMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, maxWidth: 150, flexShrink: 1 },
   sourceTypeTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  sourceTypeTagNormal: { color: "#F6D39A", backgroundColor: "#584222" },
+  sourceTypeTagNormal: { color: "#D6DCE6", backgroundColor: "#4A5568" },
   sourceConnectionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#77869D", flexShrink: 0 },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
@@ -208,7 +218,6 @@ const styles = StyleSheet.create({
   adScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(9, 12, 25, 0.42)" },
   adContent: { minHeight: 307, justifyContent: "flex-end", padding: 28 },
   adKicker: { color: "#FFC158", fontSize: 12, lineHeight: 18, fontWeight: "900", letterSpacing: 1.1, marginBottom: 7 },
-  adAction: { alignSelf: "flex-start", height: 50, paddingHorizontal: 19, borderRadius: 14, backgroundColor: "#FFB84D", marginTop: 21, flexDirection: "row", alignItems: "center", gap: 9 },
   adPagination: { position: "absolute", right: 20, bottom: 19, flexDirection: "row", gap: 6 },
   adDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.48)" },
   adDotActive: { width: 20, backgroundColor: "#FFB84D" },

@@ -75,11 +75,14 @@ export async function getPosterCacheSummary(): Promise<{ count: number; bytes: n
     }
   }))).filter((item): item is { url: string; bytes: number } => Boolean(item));
 
-  const validUrls = cached.map((item) => item.url);
-  if (validUrls.length !== urls.length) {
-    await AsyncStorage.setItem(POSTER_CACHE_URLS_KEY, JSON.stringify(validUrls));
-  }
-  return { count: cached.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
+  // Do not rewrite the index based on a point-in-time cache lookup. expo-image
+  // may not expose a cache path while a screen is changing, and this used to
+  // delete otherwise valid local poster records when entering Search. Only
+  // clearPosterCache(), which is explicitly triggered by the user, may remove
+  // the poster index.
+  // The URL index is persistent metadata. Keep reporting tracked posters even
+  // if the native image cache temporarily hides a file during navigation.
+  return { count: urls.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
 }
 
 export async function clearPosterCache(): Promise<void> {

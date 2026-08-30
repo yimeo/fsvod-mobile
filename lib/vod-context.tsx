@@ -127,8 +127,8 @@ export function VodProvider({ children }: { children: ReactNode }) {
       const [savedEndpoint, savedSources, savedOfficialResourceSync] = await Promise.all([getEndpoint(), getSources(), getOfficialResourceSyncState()]);
       setSources(savedSources);
       setOfficialResourceSync(savedOfficialResourceSync);
-      setIsBooting(false);
       if (savedEndpoint) {
+        setIsBooting(false);
         setEndpoint(savedEndpoint);
         void (async () => {
           try {
@@ -141,10 +141,21 @@ export function VodProvider({ children }: { children: ReactNode }) {
         void syncOfficialResources();
       } else {
         void (async () => {
-          await syncOfficialResources();
+          // On a first install, the first source returned by the official
+          // api.json is the default. Verify it before exposing Home, and only
+          // fall back to later sources if that first source is unavailable.
+          const officialResult = await syncOfficialResources();
           const refreshedSources = await getSources();
           setSources(refreshedSources);
-          await activateFirstAvailableSource(refreshedSources);
+          const firstOfficial = officialResult.resources[0];
+          const orderedCandidates = firstOfficial
+            ? [
+                ...refreshedSources.filter((source) => source.endpoint.apiUrl === firstOfficial.address),
+                ...refreshedSources.filter((source) => source.endpoint.apiUrl !== firstOfficial.address),
+              ]
+            : refreshedSources;
+          await activateFirstAvailableSource(orderedCandidates);
+          setIsBooting(false);
         })();
       }
     };

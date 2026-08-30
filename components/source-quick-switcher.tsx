@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   optionNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   optionName: { color: "#F0F4F9", fontSize: 14, lineHeight: 20, fontWeight: "900", flexShrink: 1 },
   officialTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  normalTag: { color: "#F6D39A", backgroundColor: "#584222" },
+  normalTag: { color: "#D6DCE6", backgroundColor: "#4A5568" },
   optionStatus: { color: "#9EB3C9", fontSize: 10, lineHeight: 15, marginTop: 2 },
   optionStatusUnhealthy: { color: "#F0AB91" },
   currentLabel: { color: "#A7E5C0", fontSize: 11, lineHeight: 16, fontWeight: "900" },

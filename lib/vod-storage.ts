@@ -319,8 +319,9 @@ export async function getPosterCacheSummary(): Promise<{ count: number; bytes: n
     }
   }));
   const cached = resolved.filter((item): item is { url: string; bytes: number } => Boolean(item));
-  const cachedUrls = cached.map((item) => item.url);
-  if (cachedUrls.length !== tracked.length) await AsyncStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(cachedUrls));
+  // Cache statistics must be read-only. A native cache path can be temporarily
+  // unavailable during navigation, so rewriting this persistent index here
+  // would erase poster records when the user enters Search or Categories.
   return { count: cached.length || tracked.length, bytes: cached.reduce((total, item) => total + item.bytes, 0) };
 }
 

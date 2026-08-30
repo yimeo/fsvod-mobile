@@ -1,4 +1,4 @@
-import { ActivityIndicator, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -123,7 +123,6 @@ export default function PlayerScreen() {
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [isRatePickerOpen, setIsRatePickerOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const player = useVideoPlayer(null);
   const lastSavedPosition = useRef(0);
   const latestPosition = useRef(0);
@@ -319,11 +318,15 @@ export default function PlayerScreen() {
 
   const openExternal = useCallback(async () => {
     if (!activeEpisodeUrl) return;
-    try {
-      if (await Linking.canOpenURL(activeEpisodeUrl)) await Linking.openURL(activeEpisodeUrl);
-    } catch {
-      setPlaybackMessage("无法调用浏览器打开该播放地址。");
-    }
+    Alert.alert("打开网页播放地址", "该线路是网页播放器，将使用手机默认浏览器打开，不会在 App 内打开。", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "打开浏览器",
+        onPress: () => {
+          void Linking.openURL(activeEpisodeUrl).catch(() => setPlaybackMessage("无法调用手机默认浏览器打开该播放地址。"));
+        },
+      },
+    ]);
   }, [activeEpisodeUrl]);
 
   const togglePlayback = useCallback(() => {
@@ -432,8 +435,6 @@ export default function PlayerScreen() {
                       contentFit="contain"
                       surfaceType="textureView"
                       useExoShutter
-                      onFullscreenEnter={() => setIsFullscreen(true)}
-                      onFullscreenExit={() => setIsFullscreen(false)}
                     />
                   </View>
                 </GestureDetector>
@@ -445,17 +446,11 @@ export default function PlayerScreen() {
                 <Text numberOfLines={1} ellipsizeMode="tail" style={styles.statusText}>{isUsingOffline ? "状态：已连接 · 缓冲：本地" : `状态：${playerStatus === "readyToPlay" ? (isPlaying ? "播放中" : "已暂停") : playerStatus === "error" ? "连接异常" : "加载中"} · 网速：${networkSpeed} · 缓冲：${bufferedPosition >= 0 ? `${Math.max(0, bufferedPosition).toFixed(0)} 秒` : "检测中"}`}</Text>
               </View>
               {!isUsingOffline && isRatePickerOpen ? <View style={styles.ratePicker}>{PLAYBACK_RATES.map((rate) => <Pressable key={rate} accessibilityRole="button" accessibilityLabel={`设置 ${formatPlaybackRate(rate)} 倍速`} onPress={() => setRate(rate)} style={({ pressed }) => [styles.speedChip, playbackRate === rate && styles.speedChipActive, pressed && styles.pressed]}><Text style={[styles.speedChipText, playbackRate === rate && styles.speedChipTextActive]}>{formatPlaybackRate(rate)}×</Text></Pressable>)}</View> : null}
-              <View style={styles.playerTools}>
-                <Pressable onPress={togglePlayback} style={({ pressed }) => [styles.playToggle, pressed && styles.pressed]}>
-                  <Text style={styles.playToggleText}>{isPlaying ? "暂停" : "播放"}</Text>
-                </Pressable>
-                <Text style={styles.fullscreenHint}>{isFullscreen ? "全屏中" : "双击播放/暂停 · 全屏横屏"}</Text>
-              </View>
             </View>
           ) : (
             <View style={styles.unsupported}>
               <Text style={styles.unsupportedTitle}>此线路不是可直接播放的视频地址</Text>
-              <Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址。你可以切换播放线路、切换剧集，或在浏览器中打开。</Text>
+              <Text style={styles.unsupportedText}>该数据源提供了网页型或解析型地址，不能在 App 内直接播放。点击下方按钮后，将使用手机默认浏览器打开。</Text>
               <Pressable onPress={() => void openExternal()} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}>
                 <Text style={styles.externalText}>在浏览器打开</Text>
               </Pressable>
