@@ -23,6 +23,7 @@ interface VodContextValue {
   switchSource: (id: string) => Promise<boolean>;
   deleteSource: (id: string) => Promise<void>;
   checkSource: (id: string) => Promise<void>;
+  checkAllSources: () => Promise<void>;
   renameSource: (id: string, displayName: string) => Promise<void>;
   updateSource: (id: string, address: string, displayName: string) => Promise<void>;
   reorderSource: (id: string, direction: -1 | 1) => Promise<void>;
@@ -103,6 +104,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const activateFirstAvailableSource = useCallback(async (candidates: SavedMacCmsSource[]) => {
     let lastError: string | null = null;
     for (const candidate of candidates) {
+      const startedAt = Date.now();
       try {
         const page = await fetchVodPage(candidate.endpoint, { page: 1 });
         // The initial list response already contains the category tree. Avoid
@@ -114,7 +116,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
         setEndpoint(candidate.endpoint);
         setCategories(nextCategories);
         setSourceError(null);
-        setSources(await updateSourceHealth(candidate.id, "healthy"));
+        setSources(await updateSourceHealth(candidate.id, "healthy", null, Date.now() - startedAt));
         return true;
       } catch (error) {
         lastError = toChineseNetworkError(error, "数据源连接失败，请稍后重试");
@@ -133,9 +135,11 @@ export function VodProvider({ children }: { children: ReactNode }) {
       if (savedEndpoint) {
         setEndpoint(savedEndpoint);
         void (async () => {
+          const startedAt = Date.now();
           try {
             const page = await fetchVodPage(savedEndpoint, { page: 1 });
             setCategories(buildCategoryTree([page.raw], page.items));
+            setSources(await updateSourceHealth(savedEndpoint.apiUrl, "healthy", null, Date.now() - startedAt));
           } catch (error) {
             setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
             // Only refresh the official primary/backup catalog when the
@@ -184,19 +188,25 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const checkSource = useCallback(async (id: string) => {
     const source = sources.find((item) => item.id === id);
     if (!source) return;
+    const startedAt = Date.now();
     try {
       const page = await fetchVodPage(source.endpoint, { page: 1 });
       const nextCategories = await visibleCategories(source.endpoint, page.raw, page.items);
       if (nextCategories.length === 0) throw new Error("该数据源没有可浏览的分类数据");
-      setSources(await updateSourceHealth(id, "healthy"));
+      setSources(await updateSourceHealth(id, "healthy", null, Date.now() - startedAt));
     } catch (error) {
-      setSources(await updateSourceHealth(id, "unhealthy", toChineseNetworkError(error, "连接失败，请稍后重试")));
+      setSources(await updateSourceHealth(id, "unhealthy", toChineseNetworkError(error, "连接失败，请稍后重试"), null));
     }
   }, [sources]);
+
+  const checkAllSources = useCallback(async () => {
+    for (const source of sources) await checkSource(source.id);
+  }, [checkSource, sources]);
 
   const switchSource = useCallback(async (id: string): Promise<boolean> => {
     const source = sources.find((item) => item.id === id);
     if (!source) return false;
+    const startedAt = Date.now();
     try {
       const page = await fetchVodPage(source.endpoint, { page: 1 });
       const nextCategories = await visibleCategories(source.endpoint, page.raw, page.items);
@@ -205,7 +215,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setEndpoint(source.endpoint);
       setCategories(nextCategories);
       setSourceError(null);
-      setSources(await updateSourceHealth(id, "healthy"));
+      setSources(await updateSourceHealth(id, "healthy", null, Date.now() - startedAt));
       return true;
     } catch (error) {
       const message = toChineseNetworkError(error, "数据源连接失败，请稍后重试");
@@ -260,7 +270,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories, officialResourceSync, syncOfficialResources }}>
+    <VodContext.Provider value={{ endpoint, sources, categories, isBooting, sourceError, configureSource, switchSource, deleteSource, checkSource, checkAllSources, renameSource: renameSavedSource, updateSource: updateSavedSource, reorderSource, refreshCategories, officialResourceSync, syncOfficialResources }}>
       {children}
     </VodContext.Provider>
   );

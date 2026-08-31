@@ -44,6 +44,7 @@ export interface SavedMacCmsSource {
   sourceType?: "official" | "custom";
   officialKey?: string;
   health: SourceHealth;
+  responseTimeMs?: number | null;
   lastCheckedAt: string | null;
   lastError: string | null;
 }
@@ -138,8 +139,8 @@ export async function replaceSource(id: string, endpoint: MacCmsEndpoint, displa
   return next;
 }
 
-export async function updateSourceHealth(id: string, health: SourceHealth, lastError: string | null = null): Promise<SavedMacCmsSource[]> {
-  const next = (await getSources()).map((source) => source.id === id ? { ...source, health, lastCheckedAt: new Date().toISOString(), lastError } : source);
+export async function updateSourceHealth(id: string, health: SourceHealth, lastError: string | null = null, responseTimeMs: number | null = null): Promise<SavedMacCmsSource[]> {
+  const next = (await getSources()).map((source) => source.id === id ? { ...source, health, responseTimeMs, lastCheckedAt: new Date().toISOString(), lastError } : source);
   await saveSources(next);
   return next;
 }

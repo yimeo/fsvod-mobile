@@ -35,6 +35,8 @@ export default function SettingsScreen() {
   const [newSourceAddress, setNewSourceAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [isCheckingAll, setIsCheckingAll] = useState(false);
+  const [completedCheckIds, setCompletedCheckIds] = useState<string[]>([]);
   const [switchingSourceId, setSwitchingSourceId] = useState<string | null>(null);
   const [isOfficialSyncing, setIsOfficialSyncing] = useState(false);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
@@ -114,14 +116,25 @@ export default function SettingsScreen() {
   };
 
   const runCheck = async (id: string) => {
-    if (isSaving || switchingSourceId) return;
+    if (isSaving || switchingSourceId || checkingId) return;
     setCheckingId(id);
-    setMessage("正在检测数据源连接，请稍候…");
+    setCompletedCheckIds((current) => current.filter((item) => item !== id));
     try {
       await checkSource(id);
-      setMessage("数据源检测完成。");
+      setCompletedCheckIds((current) => [...current.filter((item) => item !== id), id]);
     } finally {
       setCheckingId(null);
+    }
+  };
+
+  const runCheckAll = async () => {
+    if (isSaving || switchingSourceId || checkingId || isCheckingAll || sources.length === 0) return;
+    setIsCheckingAll(true);
+    setMessage("正在检测全部数据源连接和速度，请稍候…");
+    try {
+      for (const source of sources) await runCheck(source.id);
+    } finally {
+      setIsCheckingAll(false);
     }
   };
 
@@ -222,7 +235,7 @@ export default function SettingsScreen() {
         <View style={styles.profileHeader}><Image source={require("@/assets/images/icon.png")} style={styles.profileIcon} /><View style={styles.profileCopy}><Text style={styles.heading}>我的飞鸿影院</Text><SourceQuickSwitcher style={styles.profileLeadRow}><View style={[styles.profileStatusDot, activeSourceTone === "healthy" && styles.profileStatusDotHealthy, activeSourceTone === "unhealthy" && styles.profileStatusDotUnhealthy]} /><Text numberOfLines={1} style={styles.lead}>{activeSource?.displayName || "本地影视内容库"}</Text>{activeSource ? <Text style={[styles.sourceTypeTag, getSourceTypeLabel(activeSource) === "普通" && styles.sourceTypeTagNormal]}>{getSourceTypeLabel(activeSource)}</Text> : null}</SourceQuickSwitcher></View></View>
         <View style={styles.overviewList}><Pressable onPress={() => router.navigate("/history" as never)} style={({ pressed }) => [styles.overviewCard, pressed && styles.pressed]}><View style={styles.overviewIcon}><Text style={styles.overviewGlyph}>◷</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>观看记录</Text><Text style={styles.overviewText}>{cache.history ? `${cache.history} 条记录，可继续观看` : "暂无观看记录"}</Text></View><Text style={styles.overviewArrow}>›</Text></Pressable><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.overviewCard, styles.downloadOverview, pressed && styles.pressed]}><View style={[styles.overviewIcon, styles.downloadOverviewIcon]}><Text style={[styles.overviewGlyph, styles.downloadOverviewGlyph]}>↓</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>已下载剧集</Text><Text style={styles.overviewText}>{cache.offlineCount ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : "暂无已下载剧集"}</Text></View><Text style={[styles.overviewArrow, styles.downloadOverviewGlyph]}>›</Text></Pressable></View>
         <View style={styles.section}>
-          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>可添加、重命名、排序、切换与检测 MACCMS API。</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
+          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>支持添加Maccms-v10资源站API</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable disabled={isCheckingAll || Boolean(checkingId) || Boolean(switchingSourceId)} onPress={() => void runCheckAll()} style={({ pressed }) => [styles.addSourceButton, (pressed || isCheckingAll) && styles.pressed]}>{isCheckingAll ? <ActivityIndicator size="small" color="#141821" /> : <Text style={styles.addSourceButtonText}>全部检测</Text>}</Pressable><Pressable disabled={isCheckingAll} onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
           <View style={[styles.officialSyncCard, officialResourceSync.lastError && styles.officialSyncCardWarning]}><View style={styles.officialSyncCopy}><View style={styles.officialSyncTitleRow}><Text style={styles.officialSyncTitle}>官方资源</Text><Text style={styles.officialSyncTag}>自动同步</Text></View><Text style={styles.officialSyncText}>{officialResourceSync.lastError ? "官方配置暂时无法访问，已保留现有数据源" : officialResourceSync.lastCheckedAt ? `已检查 ${officialResourceSync.resourceCount} 个资源站 · ${new Date(officialResourceSync.lastCheckedAt).toLocaleString("zh-CN")}` : "启动后会自动检查官方资源站更新"}</Text></View><Pressable disabled={isOfficialSyncing} onPress={() => void runOfficialSync()} style={({ pressed }) => [styles.officialSyncButton, (pressed || isOfficialSyncing) && styles.pressed]}>{isOfficialSyncing ? <ActivityIndicator size="small" color="#141821" /> : <Text style={styles.officialSyncButtonText}>检查更新</Text>}</Pressable></View>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
@@ -238,7 +251,7 @@ export default function SettingsScreen() {
                 <View style={styles.sourceTop}>
                   <Pressable disabled={Boolean(isSaving || checkingId || switchingSourceId)} onPress={() => void runSwitch(source.id)} style={({ pressed }) => [styles.sourceMain, pressed && styles.pressed, switchingSourceId === source.id && styles.sourceMainBusy]}>
                     <View style={[styles.sourceMark, source.health === "healthy" && styles.sourceMarkHealthy, source.health === "unhealthy" && styles.sourceMarkUnhealthy]}><View style={[styles.sourceMarkDot, source.health === "healthy" && styles.sourceMarkDotHealthy, source.health === "unhealthy" && styles.sourceMarkDotUnhealthy]} /></View>
-                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text style={[styles.sourceOfficialTag, getSourceTypeLabel(source) === "普通" && styles.sourceNormalTag]}>{getSourceTypeLabel(source)}</Text></View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{switchingSourceId === source.id ? "正在验证连接并切换，请稍候…" : source.health === "healthy" ? "连接正常" : source.health === "unhealthy" ? toChineseNetworkError(source.lastError, "连接异常，请稍后重试") : "尚未检测"}{!switchingSourceId && source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
+                    <View style={styles.sourceInfo}><View style={styles.sourceNameRow}><Text numberOfLines={1} style={styles.sourceName}>{source.displayName}</Text><Text style={[styles.sourceOfficialTag, getSourceTypeLabel(source) === "普通" && styles.sourceNormalTag]}>{getSourceTypeLabel(source)}</Text></View><Text numberOfLines={1} style={styles.sourceAddress}>{source.endpoint.apiUrl}</Text><Text numberOfLines={1} style={[styles.sourceStatus, source.health === "unhealthy" && styles.sourceStatusUnhealthy, source.health === "unknown" && styles.sourceStatusUnknown]}>{switchingSourceId === source.id ? "正在验证连接并切换，请稍候…" : source.health === "healthy" ? `连接正常${source.responseTimeMs != null ? ` · ${source.responseTimeMs} ms` : ""}` : source.health === "unhealthy" ? toChineseNetworkError(source.lastError, "连接异常，请稍后重试") : "尚未检测"}{!switchingSourceId && source.lastCheckedAt ? ` · ${new Date(source.lastCheckedAt).toLocaleString("zh-CN")}` : ""}</Text></View>
                   </Pressable>
                   <Pressable disabled={Boolean(isSaving || checkingId || switchingSourceId)} accessibilityLabel={`重命名 ${source.displayName}`} onPress={() => beginRename(source)} style={({ pressed }) => [styles.editSourceButton, pressed && styles.pressed, Boolean(isSaving || checkingId || switchingSourceId) && styles.disabled]}>{switchingSourceId === source.id ? <ActivityIndicator size="small" color="#F5C36B" /> : <Text style={styles.editSourceGlyph}>✎</Text>}</Pressable>
                 </View>
@@ -246,7 +259,7 @@ export default function SettingsScreen() {
               <View style={styles.sourceActions}>
                 <Pressable onPress={() => void reorderSource(source.id, -1)} disabled={index === 0} style={({ pressed }) => [styles.miniAction, index === 0 && styles.disabled, pressed && styles.pressed]}><Text style={styles.miniActionText}>上移</Text></Pressable>
                 <Pressable onPress={() => void reorderSource(source.id, 1)} disabled={index === sources.length - 1} style={({ pressed }) => [styles.miniAction, index === sources.length - 1 && styles.disabled, pressed && styles.pressed]}><Text style={styles.miniActionText}>下移</Text></Pressable>
-                <Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id} style={({ pressed }) => [styles.checkAction, (pressed || checkingId === source.id) && styles.pressed]}>{checkingId === source.id ? <ActivityIndicator color="#FFCD75" size="small" /> : <Text style={styles.checkActionText}>检测连接</Text>}</Pressable>
+                <Pressable onPress={() => void runCheck(source.id)} disabled={checkingId === source.id || isCheckingAll} style={({ pressed }) => [styles.checkAction, (pressed || checkingId === source.id || isCheckingAll) && styles.pressed]}>{checkingId === source.id ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#FFCD75" size="small" /><Text style={styles.checkActionText}>检测中…</Text></View> : <Text style={styles.checkActionText}>{completedCheckIds.includes(source.id) ? "检测完成" : "检测连接"}</Text>}</Pressable>
                 <Pressable onPress={() => confirmDeleteSource(source)} style={({ pressed }) => [styles.miniAction, styles.removeAction, pressed && styles.pressed]}><Text style={styles.removeActionText}>删除</Text></Pressable>
               </View>
             </View>

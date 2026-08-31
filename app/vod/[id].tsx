@@ -9,7 +9,7 @@ import { VodPoster } from "@/components/vod-poster";
 import { useDownloadQueue } from "@/lib/download-queue-context";
 import { fetchVodDetail, type MacCmsVodDetail } from "@/lib/maccms";
 import { getOfflineDownloads, isOfflineDownloadSupported, type OfflineDownload } from "@/lib/offline-downloads";
-import { cacheVodDetail, getCachedVodDetail, saveWatchHistory } from "@/lib/vod-storage";
+import { cacheVodDetail, getCachedVodDetail, getWatchHistory, saveWatchHistory } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
 
 export default function VodDetailScreen() {
@@ -53,9 +53,11 @@ export default function VodDetailScreen() {
 
   const play = async (episodeName: string, url: string) => {
     if (!detail || !source) return;
-    await saveWatchHistory({ id: detail.id, name: detail.name, posterUrl: detail.posterUrl, sourceName: source.name, episodeName, episodeUrl: url, episodeIndex: source.episodes.findIndex((item) => item.url === url), playlist: source.episodes, playSources: detail.sources, positionSeconds: 0, watchedAt: new Date().toISOString() });
+    const previous = (await getWatchHistory()).find((entry) => entry.id === detail.id && entry.episodeUrl === url && entry.sourceName === source.name);
+    const resumePosition = previous?.positionSeconds ?? 0;
+    await saveWatchHistory({ id: detail.id, name: detail.name, posterUrl: detail.posterUrl, sourceName: source.name, episodeName, episodeUrl: url, episodeIndex: source.episodes.findIndex((item) => item.url === url), playlist: source.episodes, playSources: detail.sources, positionSeconds: resumePosition, watchedAt: new Date().toISOString() });
     const offline = downloads[url];
-    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, episodeUrl: url, vodId: detail.id, ...(detail.posterUrl ? { posterUrl: detail.posterUrl } : {}), title: detail.name, contentType: detail.typeName, episode: episodeName, source: source.name, offline: offline ? "1" : "0", episodeIndex: String(source.episodes.findIndex((item) => item.url === url)), playlist: JSON.stringify(source.episodes), playSources: JSON.stringify(detail.sources) } } as never);
+    router.push({ pathname: "/player", params: { url: offline?.localUri ?? url, episodeUrl: url, vodId: detail.id, ...(detail.posterUrl ? { posterUrl: detail.posterUrl } : {}), title: detail.name, contentType: detail.typeName, episode: episodeName, source: source.name, offline: offline ? "1" : "0", resumePosition: String(resumePosition), episodeIndex: String(source.episodes.findIndex((item) => item.url === url)), playlist: JSON.stringify(source.episodes), playSources: JSON.stringify(detail.sources) } } as never);
   };
 
   const download = async (episodeName: string, url: string) => {
