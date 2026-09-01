@@ -10,7 +10,7 @@ import {
   type MacCmsVod,
 } from "@/lib/maccms";
 import { getOfficialResourceSyncState, OFFICIAL_RESOURCE_CONFIG_URLS, syncOfficialResourceCatalog, type OfficialResourceSyncResult, type OfficialResourceSyncState } from "@/lib/official-resources";
-import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, replaceSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { clearEndpoint, getEndpoint, getSources, moveSource, removeSource, renameSource, replaceOfficialSources, replaceSource, saveEndpoint, updateSourceHealth, upsertSource, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { toChineseNetworkError } from "@/lib/network-error";
 
 interface VodContextValue {
@@ -54,36 +54,31 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const syncOfficialResources = useCallback(async (force = false): Promise<OfficialResourceSyncResult> => {
     const result = await syncOfficialResourceCatalog(force);
     setOfficialResourceSync(result.state);
-    if (!result.success || result.skipped || !result.resources.length) return result;
+    if (!result.success || result.skipped) return result;
 
-    let nextSources = await getSources();
+    const nextSources = await replaceOfficialSources(result.resources.map((resource) => ({
+      key: resource.key,
+      endpoint: endpointFromOfficialAddress(resource.address),
+      displayName: resource.name,
+    })));
     const activeEndpoint = await getEndpoint();
-    for (const resource of result.resources) {
-      const existing = nextSources.find((source) => source.officialKey === resource.key) ?? nextSources.find((source) => source.endpoint.apiUrl === resource.address);
-      const nextEndpoint = existing?.endpoint.apiUrl === resource.address ? existing.endpoint : endpointFromOfficialAddress(resource.address);
-      const unchanged = existing?.sourceType === "official" && existing.officialKey === resource.key && existing.displayName === resource.name && existing.endpoint.apiUrl === nextEndpoint.apiUrl;
-      if (unchanged) continue;
-
-      if (existing?.officialKey === resource.key && existing.id !== nextEndpoint.apiUrl) {
-        nextSources = await replaceSource(existing.id, nextEndpoint, resource.name);
-        nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "unknown");
-      } else {
-        nextSources = await upsertSource(nextEndpoint, existing?.health ?? "unknown", existing?.lastError ?? null, resource.name, { sourceType: "official", officialKey: resource.key });
-      }
-
-      if (activeEndpoint?.apiUrl === existing?.id && activeEndpoint?.apiUrl !== nextEndpoint.apiUrl) {
-        await saveEndpoint(nextEndpoint);
-        setEndpoint(nextEndpoint);
+    const activeStillExists = activeEndpoint && nextSources.some((source) => source.id === activeEndpoint.apiUrl);
+    if (activeEndpoint && !activeStillExists) {
+      const fallback = nextSources[0];
+      if (fallback) {
+        await saveEndpoint(fallback.endpoint);
+        setEndpoint(fallback.endpoint);
         try {
-          const page = await fetchVodPage(nextEndpoint, { page: 1 });
-          setCategories(await visibleCategories(nextEndpoint, page.raw, page.items));
+          const page = await fetchVodPage(fallback.endpoint, { page: 1 });
+          setCategories(await visibleCategories(fallback.endpoint, page.raw, page.items));
           setSourceError(null);
-          nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "healthy");
         } catch (error) {
-          const message = toChineseNetworkError(error, "更新后的官方数据源暂不可用，请稍后重试");
-          setSourceError(message);
-          nextSources = await updateSourceHealth(nextEndpoint.apiUrl, "unhealthy", message);
+          setSourceError(toChineseNetworkError(error, "更新后的官方数据源暂不可用，请稍后重试"));
         }
+      } else {
+        await clearEndpoint();
+        setEndpoint(null);
+        setCategories([]);
       }
     }
     setSources(nextSources);

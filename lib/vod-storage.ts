@@ -98,6 +98,31 @@ export function saveSources(sources: SavedMacCmsSource[]): Promise<void> {
   return AsyncStorage.setItem(SOURCES_KEY, JSON.stringify(sources));
 }
 
+export async function replaceOfficialSources(
+  officialSources: Array<{ key: string; endpoint: MacCmsEndpoint; displayName: string }>,
+): Promise<SavedMacCmsSource[]> {
+  const current = await getSources();
+  const previousByKey = new Map(current.filter((source) => source.sourceType === "official" && source.officialKey).map((source) => [source.officialKey as string, source]));
+  const previousByAddress = new Map(current.filter((source) => source.sourceType === "official").map((source) => [source.endpoint.apiUrl, source]));
+  const nextOfficial = officialSources.map((item) => {
+    const previous = previousByKey.get(item.key) ?? previousByAddress.get(item.endpoint.apiUrl);
+    return {
+      id: item.endpoint.apiUrl,
+      endpoint: item.endpoint,
+      displayName: item.displayName.trim() || item.endpoint.inputDomain,
+      sourceType: "official" as const,
+      officialKey: item.key,
+      health: previous?.health ?? "unknown",
+      responseTimeMs: previous?.responseTimeMs,
+      lastCheckedAt: previous?.lastCheckedAt ?? null,
+      lastError: previous?.lastError ?? null,
+    };
+  });
+  const next = [...nextOfficial, ...current.filter((source) => source.sourceType !== "official")];
+  await saveSources(next);
+  return next;
+}
+
 export async function upsertSource(endpoint: MacCmsEndpoint, health: SourceHealth = "healthy", lastError: string | null = null, displayName?: string, metadata?: Pick<SavedMacCmsSource, "sourceType" | "officialKey">): Promise<SavedMacCmsSource[]> {
   const sources = await getSources();
   const currentIndex = sources.findIndex((source) => source.id === sourceId(endpoint));

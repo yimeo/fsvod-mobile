@@ -62,10 +62,6 @@ function formatPlaybackRate(rate: number): string {
   return Number.isInteger(rate) ? String(rate) : String(rate).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function isShortDramaType(typeName: string, title: string): boolean {
-  return /短剧|微短剧|短视频|竖屏/i.test(`${typeName} ${title}`);
-}
-
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{
     url: string;
@@ -85,8 +81,6 @@ export default function PlayerScreen() {
   const router = useRouter();
   const routeUrl = getParam(params.url);
   const title = getParam(params.title, "影片播放");
-  const contentType = getParam(params.contentType);
-  const fullscreenOrientation = isShortDramaType(contentType, title) ? "portrait" : "landscape";
   const routeEpisode = getParam(params.episode);
   const routeSource = getParam(params.source);
   const vodId = getParam(params.vodId);
@@ -130,6 +124,7 @@ export default function PlayerScreen() {
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [isRatePickerOpen, setIsRatePickerOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fullscreenOrientation, setFullscreenOrientation] = useState<"default" | "portrait" | "landscape">("default");
   const player = useVideoPlayer(null);
   const lastSavedPosition = useRef(0);
   const latestPosition = useRef(0);
@@ -164,6 +159,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     lastSavedPosition.current = 0;
     latestPosition.current = 0;
+    setFullscreenOrientation("default");
   }, [activeEpisodeUrl]);
 
   useEffect(() => {
@@ -244,6 +240,13 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!directPlayable) return;
+    const updateOrientation = (track: { size?: { width?: number; height?: number } } | null | undefined) => {
+      const width = track?.size?.width ?? 0;
+      const height = track?.size?.height ?? 0;
+      if (width > 0 && height > 0) setFullscreenOrientation(height > width ? "portrait" : "landscape");
+    };
+    const sourceSubscription = player.addListener("sourceLoad", ({ availableVideoTracks }) => updateOrientation(availableVideoTracks?.[0]));
+    const trackSubscription = player.addListener("videoTrackChange", ({ videoTrack }) => updateOrientation(videoTrack));
     player.timeUpdateEventInterval = 5;
     const timeSubscription = player.addListener("timeUpdate", ({ currentTime, bufferedPosition: nextBufferedPosition }) => {
       if (Number.isFinite(currentTime)) {
@@ -258,6 +261,8 @@ export default function PlayerScreen() {
     });
     const playingSubscription = player.addListener("playingChange", ({ isPlaying: nextIsPlaying }) => setIsPlaying(nextIsPlaying));
     return () => {
+      sourceSubscription.remove();
+      trackSubscription.remove();
       timeSubscription.remove();
       statusSubscription.remove();
       playingSubscription.remove();
@@ -437,7 +442,7 @@ export default function PlayerScreen() {
                       style={styles.video}
                       player={player}
                       nativeControls
-                      fullscreenOptions={{ enable: true, orientation: fullscreenOrientation, autoExitOnRotate: true }}
+                      fullscreenOptions={{ enable: true, orientation: fullscreenOrientation, autoExitOnRotate: false }}
                       contentFit="contain"
                       surfaceType="textureView"
                       useExoShutter
