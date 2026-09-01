@@ -135,6 +135,16 @@ export default function PlayerScreen() {
   const playbackUrl = isOfflineResolved ? offlineUri ?? activeEpisodeUrl : "";
   const isUsingOffline = Boolean(offlineUri);
   const directPlayable = Boolean(playbackUrl && isDirectVideoUrl(playbackUrl));
+  const fullscreenViewRef = useRef<VideoView | null>(null);
+
+  const chooseFullscreen = useCallback(() => {
+    if (!directPlayable) return;
+    Alert.alert("选择全屏方向", "默认已根据视频实际画面自动判断，也可以手动选择。", [
+      { text: "取消", style: "cancel" },
+      { text: "横屏", onPress: () => { setFullscreenOrientation("landscape"); void fullscreenViewRef.current?.enterFullscreen(); } },
+      { text: "竖屏", onPress: () => { setFullscreenOrientation("portrait"); void fullscreenViewRef.current?.enterFullscreen(); } },
+    ]);
+  }, [directPlayable]);
 
   const persistProgress = useCallback((positionSeconds: number) => {
     if (!vodId || !activeEpisodeUrl || !Number.isFinite(positionSeconds)) return;
@@ -441,12 +451,14 @@ export default function PlayerScreen() {
                     <VideoView
                       style={styles.video}
                       player={player}
+                      ref={fullscreenViewRef}
                       nativeControls
                       fullscreenOptions={{ enable: true, orientation: fullscreenOrientation, autoExitOnRotate: false }}
                       contentFit="contain"
                       surfaceType="textureView"
                       useExoShutter
                     />
+                    <Pressable accessibilityRole="button" accessibilityLabel="全屏，选择横屏或竖屏" onPress={chooseFullscreen} style={({ pressed }) => [styles.fullscreenButton, pressed && styles.pressed]}><Text style={styles.fullscreenButtonText}>全屏</Text></Pressable>
                   </View>
                 </GestureDetector>
                 {(!isOfflineResolved || (playerStatus !== "readyToPlay" && playerStatus !== "error")) ? <View style={styles.loadingOverlay}><ActivityIndicator color="#F5B64B" size="large" /><Text style={styles.loadingTitle}>{!isOfflineResolved ? "正在准备影视…" : playerStatus === "loading" ? "正在加载影视…" : "正在连接播放源…"}</Text><Text style={styles.loadingMeta}>{isUsingOffline ? "正在读取本机缓存" : `网络速度 ${networkSpeed}`}</Text></View> : null}
@@ -551,6 +563,8 @@ const styles = StyleSheet.create({
   videoStage: { position: "relative" },
   videoTouchArea: { width: "100%", aspectRatio: 16 / 9 },
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#050812" },
+  fullscreenButton: { position: "absolute", right: 10, bottom: 10, height: 32, paddingHorizontal: 12, borderRadius: 8, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(8, 13, 25, 0.86)", borderWidth: 1, borderColor: "rgba(255,255,255,0.28)" },
+  fullscreenButtonText: { color: "#FFFFFF", fontSize: 12, lineHeight: 17, fontWeight: "900" },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5, 8, 18, 0.82)" },
   loadingTitle: { color: "#F4F6FA", fontSize: 14, lineHeight: 20, fontWeight: "800", marginTop: 10 },
   loadingMeta: { color: "#B8C5D8", fontSize: 11, lineHeight: 17, marginTop: 4 },
