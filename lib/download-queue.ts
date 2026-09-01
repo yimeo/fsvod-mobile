@@ -19,11 +19,13 @@ export interface DownloadQueueTask extends OfflineDownloadRequest {
 export interface DownloadSettings {
   wifiOnly: boolean;
   storageLimitBytes: number;
+  concurrency: 1 | 2 | 3;
 }
 
 export const DEFAULT_DOWNLOAD_SETTINGS: DownloadSettings = {
-  wifiOnly: true,
+  wifiOnly: false,
   storageLimitBytes: 50 * 1024 * 1024 * 1024,
+  concurrency: 2,
 };
 
 export function createQueueTask(request: OfflineDownloadRequest): DownloadQueueTask {
@@ -93,7 +95,8 @@ export async function clearCompletedQueueTasks(): Promise<void> {
 
 export async function getDownloadSettings(): Promise<DownloadSettings> {
   const stored = await getJson<Partial<DownloadSettings>>(SETTINGS_KEY, {});
-  return { ...DEFAULT_DOWNLOAD_SETTINGS, ...stored };
+  const concurrency = stored.concurrency === 1 || stored.concurrency === 3 ? stored.concurrency : 2;
+  return { ...DEFAULT_DOWNLOAD_SETTINGS, ...stored, concurrency };
 }
 
 export function saveDownloadSettings(settings: DownloadSettings): Promise<void> {

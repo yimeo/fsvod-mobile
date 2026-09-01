@@ -3,7 +3,7 @@ import { AppState, type AppStateStatus, Platform } from "react-native";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { clearOfflineDownloads, downloadEpisodeOffline, getOfflineSummary, isOfflineDownloadSupported, pauseOfflineDownload, removeOfflineDownloadByUrl, stopOfflineDownload, type OfflineDownloadRequest } from "@/lib/offline-downloads";
-import { getDownloadSettings, getQueueTasks, nextRunnableTask, retryTask, saveDownloadSettings, saveQueueTasks, type DownloadQueueTask, type DownloadSettings, updateQueueTask, upsertQueueTasks } from "@/lib/download-queue";
+import { getDownloadSettings, getQueueTasks, retryTask, saveDownloadSettings, saveQueueTasks, type DownloadQueueTask, type DownloadSettings, updateQueueTask, upsertQueueTasks } from "@/lib/download-queue";
 
 interface DownloadQueueContextValue {
   tasks: DownloadQueueTask[];
@@ -28,7 +28,7 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<DownloadSettings | null>(null);
   const [isWifi, setIsWifi] = useState(false);
   const [isActive, setIsActive] = useState(AppState.currentState === "active");
-  const runningRef = useRef(false);
+  const runningTasksRef = useRef(new Set<string>());
   const tasksRef = useRef<DownloadQueueTask[]>([]);
   const settingsRef = useRef<DownloadSettings | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -63,16 +63,13 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
     return () => { appSubscription.remove(); networkSubscription.remove(); };
   }, []);
 
-  const runNext = useCallback(async () => {
-    if (runningRef.current || !settingsRef.current || appStateRef.current !== "active") return;
-    if (Platform.OS === "web" || (settingsRef.current.wifiOnly && !isWifi)) return;
-    const task = nextRunnableTask(tasksRef.current);
-    if (!task) return;
-    runningRef.current = true;
+  const runTask = useCallback(async (task: DownloadQueueTask) => {
+    runningTasksRef.current.add(task.id);
     await commitTasks(updateQueueTask(tasksRef.current, task.id, { status: "downloading", error: null }));
     try {
       const summary = await getOfflineSummary();
-      if (settingsRef.current.storageLimitBytes > 0 && summary.sizeBytes >= settingsRef.current.storageLimitBytes) throw new Error("已达到离线存储上限，请清理缓存或提高上限");
+      const currentSettings = settingsRef.current;
+      if (currentSettings?.storageLimitBytes && currentSettings.storageLimitBytes > 0 && summary.sizeBytes >= currentSettings.storageLimitBytes) throw new Error("已达到离线存储上限，请清理缓存或提高上限");
       await downloadEpisodeOffline(task, (progress) => {
         const next = updateQueueTask(tasksRef.current, task.id, { progress });
         tasksRef.current = next;
@@ -85,10 +82,17 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
       if (!current || current.status === "paused") return;
       await commitTasks(updateQueueTask(tasksRef.current, task.id, { status: "failed", error: error instanceof Error ? error.message : "下载失败，请重试" }));
     } finally {
-      runningRef.current = false;
-      setTimeout(() => { void runNext(); }, 0);
+      runningTasksRef.current.delete(task.id);
     }
-  }, [commitTasks, isWifi]);
+  }, [commitTasks]);
+
+  const runNext = useCallback(async () => {
+    if (!settingsRef.current || appStateRef.current !== "active") return;
+    if (Platform.OS === "web" || (settingsRef.current.wifiOnly && !isWifi)) return;
+    const slots = Math.max(0, settingsRef.current.concurrency - runningTasksRef.current.size);
+    const candidates = tasksRef.current.filter((task) => task.status === "queued" && !runningTasksRef.current.has(task.id)).slice(0, slots);
+    if (candidates.length) await Promise.all(candidates.map((task) => runTask(task)));
+  }, [isWifi, runTask]);
 
   useEffect(() => { void runNext(); }, [isWifi, isActive, tasks, settings, runNext]);
 

@@ -53,10 +53,12 @@ export default function DownloadsScreen() {
           </View>
           <View style={styles.settingsCard}>
             <View style={styles.settingsHead}><View><Text style={styles.settingsTitle}>下载条件</Text><Text style={styles.settingsText}>仅 Wi‑Fi 自动下载</Text></View><Pressable onPress={() => settings && void updateSettings({ ...settings, wifiOnly: !settings.wifiOnly })} style={[styles.switchTrack, settings?.wifiOnly && styles.switchTrackActive]}><View style={[styles.switchKnob, settings?.wifiOnly && styles.switchKnobActive]} /></Pressable></View>
-            <Text style={styles.settingsTitle}>离线存储上限</Text>
+            <Text style={styles.settingsTitle}>下载线程</Text>
+            <View style={styles.limitRow}>{([1, 2, 3] as const).map((count) => <Pressable key={count} onPress={() => settings && void updateSettings({ ...settings, concurrency: count })} style={({ pressed }) => [styles.limitChip, settings?.concurrency === count && styles.limitChipActive, pressed && styles.pressed]}><Text style={[styles.limitText, settings?.concurrency === count && styles.limitTextActive]}>{`线程${count}`}</Text></Pressable>)}</View>
+            <Text style={[styles.settingsTitle, styles.storageTitle]}>离线存储上限</Text>
             <View style={styles.limitRow}>{[...LIMITS, UNLIMITED].map((limit) => <Pressable key={limit} onPress={() => settings && void updateSettings({ ...settings, storageLimitBytes: limit })} style={({ pressed }) => [styles.limitChip, settings?.storageLimitBytes === limit && styles.limitChipActive, pressed && styles.pressed]}><Text style={[styles.limitText, settings?.storageLimitBytes === limit && styles.limitTextActive]}>{formatStorageLimit(limit)}</Text></Pressable>)}</View>
           </View>
-          <View style={styles.queueHead}><View><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个任务 · {completedCount} 个已下载</Text></View><Pressable disabled={!actionableTasks.length} onPress={clearQueue} style={({ pressed }) => [styles.clearButton, !actionableTasks.length && styles.disabled, pressed && styles.pressed]}><Text style={styles.clearButtonText}>清空</Text></Pressable></View>
+          <View style={styles.queueHead}><View><Text style={styles.sectionTitle}>下载队列</Text><Text style={styles.queueMeta}>{actionableTasks.length} 个任务 · {completedCount} 个已下载</Text></View><View style={styles.queueActions}><Text style={styles.threadBadge}>{`线程${settings?.concurrency ?? 2}`}</Text><Pressable disabled={!actionableTasks.length} onPress={clearQueue} style={({ pressed }) => [styles.clearButton, !actionableTasks.length && styles.disabled, pressed && styles.pressed]}><Text style={styles.clearButtonText}>清空</Text></Pressable></View></View>
         </View>}
         renderItem={({ item }) => <TaskCard task={item} onOpenDetail={() => openDetail(item)} onPlayDownloaded={() => void playDownloaded(item)} onPause={() => void pauseTask(item.id)} onResume={() => void resumeTask(item.id)} onRetry={() => void retry(item.id)} onStop={() => void stopTask(item.id)} onDelete={() => void deleteTask(item.id)} />}
         ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyTitle}>下载队列为空</Text><Text style={styles.emptyText}>在影片详情页的播放列表点击“↓ 下载”，即可将所选剧集加入离线队列。</Text></View>}
@@ -99,7 +101,10 @@ const styles = StyleSheet.create({
   limitChipActive: { backgroundColor: "#F5B64B", borderColor: "#F5B64B" },
   limitText: { color: "#B6C3D6", fontSize: 12, fontWeight: "800" },
   limitTextActive: { color: "#11192B" },
+  storageTitle: { marginTop: 15 },
   queueHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 22, marginBottom: 10 },
+  queueActions: { flexDirection: "row", alignItems: "center", gap: 7 },
+  threadBadge: { color: "#F5CF86", backgroundColor: "#3A3020", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 10, fontWeight: "900" },
   sectionTitle: { color: "#F6F7FB", fontWeight: "800", fontSize: 17, lineHeight: 24 },
   queueMeta: { color: "#8D9CB2", fontSize: 11, lineHeight: 16 },
   clearButton: { minWidth: 49, height: 29, paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: "#72404A", justifyContent: "center", alignItems: "center" },
