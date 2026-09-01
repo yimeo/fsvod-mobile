@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   fullImageHidden: { opacity: 0 },
   generated: { overflow: "hidden", justifyContent: "flex-end", padding: 13, backgroundColor: "#202B46" },
   generatedTopline: { width: 28, height: 3, borderRadius: 4, backgroundColor: "#F5B64B", marginBottom: 8 },
-  generatedTitle: { color: "#FFFFFF", fontSize: 17, lineHeight: 23, fontWeight: "800", letterSpacing: 0.3, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
+  generatedTitle: { color: "#FFFFFF", fontSize: 15, lineHeight: 21, fontWeight: "800", letterSpacing: 0.3, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
   generatedCaption: { color: "#D8DEEA", fontSize: 10, letterSpacing: 1.5, marginTop: 9, fontWeight: "700" },
   loadingPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "#151E34" },
 });
