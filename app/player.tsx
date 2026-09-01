@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
   headerInfo: { flex: 1, minWidth: 0 },
   title: { color: "#F4F6FA", fontWeight: "800", fontSize: 14, lineHeight: 20 },
   episode: { color: "#9CA7BE", fontSize: 11, lineHeight: 16, marginTop: 1 },
-  playerWrap: { paddingTop: 18 },
+  playerWrap: { paddingTop: 0 },
   videoStage: { position: "relative" },
   videoTouchArea: { width: "100%", aspectRatio: 16 / 9 },
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#050812" },
