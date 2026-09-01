@@ -199,7 +199,9 @@ export function VodProvider({ children }: { children: ReactNode }) {
   }, [checkSource, sources]);
 
   const switchSource = useCallback(async (id: string): Promise<boolean> => {
-    const source = sources.find((item) => item.id === id);
+    // Read the latest persisted list because an official sync updates storage
+    // before React receives the asynchronous setSources state update.
+    const source = (await getSources()).find((item) => item.id === id);
     if (!source) return false;
     const startedAt = Date.now();
     try {
@@ -218,7 +220,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
       setSources(await updateSourceHealth(id, "unhealthy", message));
       return false;
     }
-  }, [sources]);
+  }, []);
 
   const deleteSource = useCallback(async (id: string) => {
     const next = await removeSource(id);
