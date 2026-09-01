@@ -9,13 +9,14 @@ import { useVodSource } from "@/lib/vod-context";
 interface VodCardProps {
   item: MacCmsVod;
   onPress: (item: MacCmsVod) => void;
+  compact?: boolean;
 }
 
 type PosterPair = Pick<MacCmsVod, "posterUrl" | "thumbnailUrl">;
 const detailPosterCache = new Map<string, PosterPair>();
 const requestedDetails = new Set<string>();
 
-export function VodCard({ item, onPress }: VodCardProps) {
+export function VodCard({ item, onPress, compact = false }: VodCardProps) {
   const { endpoint } = useVodSource();
   const [enrichedPoster, setEnrichedPoster] = useState<PosterPair | null>(null);
   const subtitle = [item.year, item.area].filter(Boolean).join(" · ") || item.typeName || "影视";
@@ -55,15 +56,19 @@ export function VodCard({ item, onPress }: VodCardProps) {
 
   const posterUrl = item.posterUrl ?? enrichedPoster?.posterUrl ?? null;
   const thumbnailUrl = item.thumbnailUrl ?? enrichedPoster?.thumbnailUrl ?? null;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${item.name}`} onPress={() => onPress(item)} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}><VodPoster title={item.name} url={posterUrl} thumbnailUrl={thumbnailUrl} style={styles.poster} />{item.remarks ? <View style={styles.remark}><Text numberOfLines={1} style={styles.remarkText}>{item.remarks}</Text></View> : null}<Text numberOfLines={1} style={styles.title}>{item.name}</Text><Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${item.name}`} onPress={() => onPress(item)} style={({ pressed }) => [styles.card, compact && styles.compactCard, pressed && styles.cardPressed]}><VodPoster title={item.name} url={posterUrl} thumbnailUrl={thumbnailUrl} style={[styles.poster, compact && styles.compactPoster]} />{item.remarks ? <View style={styles.remark}><Text numberOfLines={1} style={styles.remarkText}>{item.remarks}</Text></View> : null}<Text numberOfLines={1} style={[styles.title, compact && styles.compactTitle]}>{item.name}</Text><Text numberOfLines={1} style={[styles.subtitle, compact && styles.compactSubtitle]}>{subtitle}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
   card: { flex: 1, minWidth: 0, marginBottom: 20 },
+  compactCard: { marginBottom: 13 },
   cardPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
   poster: { width: "100%", aspectRatio: 2 / 3, borderRadius: 12, backgroundColor: "#151E34" },
+  compactPoster: { aspectRatio: 16 / 9, borderRadius: 10 },
   remark: { position: "absolute", right: 7, top: 8, maxWidth: "76%", borderRadius: 7, backgroundColor: "rgba(11,16,32,0.82)", paddingHorizontal: 7, paddingVertical: 4 },
   remarkText: { color: "#F8D28D", fontWeight: "700", fontSize: 10, lineHeight: 14 },
   title: { color: "#F6F7FB", fontWeight: "700", marginTop: 9, fontSize: 14, lineHeight: 20 },
+  compactTitle: { marginTop: 6, fontSize: 12, lineHeight: 17 },
   subtitle: { color: "#9CA7BE", marginTop: 2, fontSize: 12, lineHeight: 17 },
+  compactSubtitle: { fontSize: 10, lineHeight: 14 },
 });

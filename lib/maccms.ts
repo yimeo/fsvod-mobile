@@ -227,6 +227,10 @@ function collectCategoryRecords(value: unknown): Omit<MacCmsCategory, "children"
   return Object.values(value).flatMap(collectCategoryRecords);
 }
 
+function isNonMediaCategory(name: string): boolean {
+  return /演员|明星|新闻|资讯|文章|专题|留言|评论|公告|资讯中心/i.test(name.replace(/\s+/g, ""));
+}
+
 export function buildCategoryTree(payloads: unknown[], fallbackItems: MacCmsVod[]): MacCmsCategory[] {
   const sources = payloads.flatMap((payload) => {
     if (!isRecord(payload)) return [];
@@ -236,7 +240,7 @@ export function buildCategoryTree(payloads: unknown[], fallbackItems: MacCmsVod[
     .filter((item) => item.typeId && item.typeName)
     .map((item) => ({ id: item.typeId, name: item.typeName, parentId: item.parentTypeId }));
   const byId = new Map<string, Omit<MacCmsCategory, "children">>();
-  [...sources, ...inferred].forEach((category) => {
+  [...sources, ...inferred].filter((category) => !isNonMediaCategory(category.name)).forEach((category) => {
     const existing = byId.get(category.id);
     byId.set(category.id, {
       id: category.id,
