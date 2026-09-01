@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { useEffect, useState } from "react";
@@ -29,6 +29,7 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
   const [fullFailed, setFullFailed] = useState(false);
   const [fullLoaded, setFullLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const hasDistinctThumbnail = Boolean(thumbnailUrl && thumbnailUrl !== url);
   const useThumbnail = hasDistinctThumbnail && !thumbnailFailed;
   const shouldLoadFull = !hasDistinctThumbnail || thumbnailFailed || thumbnailLoaded;
@@ -38,13 +39,15 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style
     setThumbnailLoaded(false);
     setFullFailed(false);
     setFullLoaded(false);
+    setIsLoading(true);
   }, [thumbnailUrl, url]);
 
   if ((!url || !fullFailed) && ((url && shouldLoadFull) || (useThumbnail && thumbnailUrl))) {
     return (
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
-        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" placeholder={require("../assets/images/icon.png")} placeholderContentFit="contain" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoad={() => { setThumbnailLoaded(true); recordPosterCache(thumbnailUrl); }} onError={() => setThumbnailFailed(true)} /> : null}
-        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} placeholder={require("../assets/images/icon.png")} placeholderContentFit="contain" recyclingKey={`full-${cacheKey}-${url}`} onLoad={() => { setFullLoaded(true); recordPosterCache(url); }} onError={() => setFullFailed(true)} /> : null}
+        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setThumbnailLoaded(true); setIsLoading(false); recordPosterCache(thumbnailUrl); }} onError={() => { setThumbnailFailed(true); setIsLoading(false); }} /> : null}
+        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setFullLoaded(true); setIsLoading(false); recordPosterCache(url); }} onError={() => { setFullFailed(true); setIsLoading(false); }} /> : null}
+        {isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><Image source={require("../assets/images/icon.png")} style={styles.loadingIcon} tintColor="#FFFFFF" contentFit="contain" /><ActivityIndicator color="#FFFFFF" size="small" /></View> : null}
       </View>
     );
   }
@@ -76,6 +79,8 @@ const styles = StyleSheet.create({
   fullImageHidden: { opacity: 0 },
   generated: { overflow: "hidden", justifyContent: "flex-end", padding: 13, backgroundColor: "#202B46" },
   generatedTopline: { width: 28, height: 3, borderRadius: 4, backgroundColor: "#F5B64B", marginBottom: 8 },
-  generatedTitle: { color: "#FFFFFF", fontSize: 19, lineHeight: 25, fontWeight: "800", letterSpacing: 0.4, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
+  generatedTitle: { color: "#FFFFFF", fontSize: 17, lineHeight: 23, fontWeight: "800", letterSpacing: 0.3, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
   generatedCaption: { color: "#D8DEEA", fontSize: 10, letterSpacing: 1.5, marginTop: 9, fontWeight: "700" },
+  loadingPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#151E34" },
+  loadingIcon: { width: 38, height: 38, opacity: 0.96 },
 });
