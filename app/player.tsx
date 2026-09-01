@@ -208,9 +208,10 @@ export default function PlayerScreen() {
         await player.replaceAsync({
           uri: playbackUrl,
           ...(isHlsPlaybackUrl(playbackUrl) ? { contentType: "hls" as const } : {}),
-          // expo-video supports progressive-file caching on Android and iOS.
-          // iOS still cannot cache HLS streams, but MP4/WebM can be cached.
-          useCaching: true,
+          // Keep iOS on direct AVPlayer playback. Its cache layer can reject
+          // redirected, authenticated, or HLS URLs before playback starts.
+          // Android retains native cache behavior.
+          useCaching: Platform.OS === "android",
         });
         if (cancelled || requestId !== replaceRequestId.current || isLeaving.current) return;
         if (resumePosition > 0 && activeEpisodeUrl === routeEpisodeUrl) {
