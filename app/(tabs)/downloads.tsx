@@ -13,7 +13,7 @@ const UNLIMITED = 0;
 
 export default function DownloadsScreen() {
   const router = useRouter();
-  const { tasks, settings, isWifi, isActive, pauseTask, resumeTask, retry, stopTask, deleteTask, clearAllTasks, updateSettings } = useDownloadQueue();
+  const { tasks, settings, pauseTask, resumeTask, retry, stopTask, deleteTask, clearAllTasks, updateSettings } = useDownloadQueue();
   const actionableTasks = tasks;
   const completedCount = tasks.filter((task) => task.status === "completed").length;
   const openDetail = (task: DownloadQueueTask) => {
@@ -47,10 +47,6 @@ export default function DownloadsScreen() {
           <Text style={styles.eyebrow}>OFFLINE DOWNLOADS</Text>
           <Text style={styles.heading}>下载中心</Text>
           <Text style={styles.lead}>管理已缓存剧集、下载条件与离线存储空间。</Text>
-          <View style={[styles.networkCard, isWifi && isActive ? styles.networkReady : styles.networkWaiting]}>
-            <Text style={styles.networkTitle}>{isWifi && isActive ? "可自动下载" : !isActive ? "应用进入后台后暂停" : "等待 Wi‑Fi"}</Text>
-            <Text style={styles.networkText}>{settings?.wifiOnly ? "省电模式：应用保持打开且连接 Wi‑Fi 时，队列会依次自动继续。" : "应用打开时，队列会依次自动继续。"}</Text>
-          </View>
           <View style={styles.settingsCard}>
             <View style={styles.settingsHead}><View><Text style={styles.settingsTitle}>下载条件</Text><Text style={styles.settingsText}>仅 Wi‑Fi 自动下载</Text></View><Pressable onPress={() => settings && void updateSettings({ ...settings, wifiOnly: !settings.wifiOnly })} style={[styles.switchTrack, settings?.wifiOnly && styles.switchTrackActive]}><View style={[styles.switchKnob, settings?.wifiOnly && styles.switchKnobActive]} /></Pressable></View>
             <Text style={styles.settingsTitle}>下载线程</Text>
