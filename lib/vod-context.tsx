@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import * as Network from "expo-network";
 
 import {
   buildCategoryTree,
@@ -48,6 +49,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
   const [sources, setSources] = useState<SavedMacCmsSource[]>([]);
   const [categories, setCategories] = useState<MacCmsCategory[]>([]);
   const [isBooting, setIsBooting] = useState(true);
+  const retryingOfficialRef = useRef(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [officialResourceSync, setOfficialResourceSync] = useState<OfficialResourceSyncState>({ configUrl: null, configEndpoints: [...OFFICIAL_RESOURCE_CONFIG_URLS], lastCheckedAt: null, lastUpdatedAt: null, lastError: null, resourceCount: 0, resourceSignature: "" });
 
@@ -166,6 +168,34 @@ export function VodProvider({ children }: { children: ReactNode }) {
       }
     };
     void bootstrap();
+  }, [activateFirstAvailableSource, syncOfficialResources]);
+
+  useEffect(() => {
+    let disposed = false;
+    const retryOfficialWhenOnline = async () => {
+      if (disposed || retryingOfficialRef.current) return;
+      retryingOfficialRef.current = true;
+      try {
+        const result = await syncOfficialResources(true);
+        if (!disposed && result.success && result.resources.length && !(await getEndpoint())) {
+          const refreshedSources = await getSources();
+          const officialSources = refreshedSources.filter((source) => source.sourceType === "official");
+          await activateFirstAvailableSource(officialSources.length ? officialSources : refreshedSources);
+        }
+      } finally {
+        retryingOfficialRef.current = false;
+      }
+    };
+    const subscription = Network.addNetworkStateListener((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) void retryOfficialWhenOnline();
+    });
+    void Network.getNetworkStateAsync().then((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) void retryOfficialWhenOnline();
+    }).catch(() => undefined);
+    return () => {
+      disposed = true;
+      subscription.remove();
+    };
   }, [activateFirstAvailableSource, syncOfficialResources]);
 
   const configureSource = useCallback(async (address: string, displayName?: string) => {
