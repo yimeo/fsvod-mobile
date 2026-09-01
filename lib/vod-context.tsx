@@ -129,14 +129,19 @@ export function VodProvider({ children }: { children: ReactNode }) {
       const [savedEndpoint, savedSources, savedOfficialResourceSync] = await Promise.all([getEndpoint(), getSources(), getOfficialResourceSyncState()]);
       setSources(savedSources);
       setOfficialResourceSync(savedOfficialResourceSync);
-      if (savedEndpoint) {
-        setEndpoint(savedEndpoint);
+      // Treat a missing or orphaned endpoint as no selected source. This can
+      // happen after storage migration or when a source was removed externally.
+      const selectedEndpoint = savedEndpoint && savedSources.some((source) => source.endpoint.apiUrl === savedEndpoint.apiUrl)
+        ? savedEndpoint
+        : null;
+      if (selectedEndpoint) {
+        setEndpoint(selectedEndpoint);
         void (async () => {
           const startedAt = Date.now();
           try {
-            const page = await fetchVodPage(savedEndpoint, { page: 1 });
+            const page = await fetchVodPage(selectedEndpoint, { page: 1 });
             setCategories(buildCategoryTree([page.raw], page.items));
-            setSources(await updateSourceHealth(savedEndpoint.apiUrl, "healthy", null, Date.now() - startedAt));
+            setSources(await updateSourceHealth(selectedEndpoint.apiUrl, "healthy", null, Date.now() - startedAt));
           } catch (error) {
             setSourceError(toChineseNetworkError(error, "已保存数据源暂不可用，请稍后重试"));
             // Only refresh the official primary/backup catalog when the
@@ -149,6 +154,8 @@ export function VodProvider({ children }: { children: ReactNode }) {
         })();
       } else {
         void (async () => {
+          await clearEndpoint();
+          setEndpoint(null);
           // On a first install, the first source returned by the official
           // api.json is the default. Verify it before exposing Home, and only
           // fall back to later sources if that first source is unavailable.
