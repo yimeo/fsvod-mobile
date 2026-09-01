@@ -36,7 +36,7 @@ export default function CategoriesScreen() {
     const currentSource = sources.find((source) => source.id === endpoint?.apiUrl || source.endpoint.apiUrl === endpoint?.apiUrl);
   const sourceCaption = currentSource?.displayName?.trim() || currentSource?.endpoint.inputDomain?.trim() || endpoint?.inputDomain?.trim() || "当前数据源";
   const sourceTypeLabel = currentSource ? getSourceTypeLabel(currentSource) : "普通";
-  const sourceConnectionTone = sourceError ? "unhealthy" : currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
+  const sourceConnectionTone = currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
 
   useEffect(() => {
     const requestedRootId = Array.isArray(routeParams.rootId) ? routeParams.rootId[0] : routeParams.rootId;

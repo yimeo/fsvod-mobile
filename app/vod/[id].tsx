@@ -51,7 +51,7 @@ export default function VodDetailScreen() {
   const metadata = detail ? [detail.year, detail.area, detail.language].filter(Boolean).join(" · ") : "";
   const currentSource = sources.find((item) => item.id === endpoint?.apiUrl || item.endpoint.apiUrl === endpoint?.apiUrl);
   const sourceCaption = currentSource?.displayName?.trim() || currentSource?.endpoint.inputDomain?.trim() || endpoint?.inputDomain?.trim() || "当前数据源";
-  const sourceConnectionTone = sourceError ? "unhealthy" : currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
+  const sourceConnectionTone = currentSource?.health === "healthy" ? "healthy" : currentSource?.health === "unhealthy" ? "unhealthy" : "unknown";
 
   const play = async (episodeName: string, url: string) => {
     if (!detail || !source) return;
