@@ -28,6 +28,7 @@ export default function CategoriesScreen() {
   const [classicPageSize, setClassicPageSize] = useState<CategoryClassicPageSize>(DEFAULT_LIST_PAGE_SIZE);
   const listRef = useRef<FlatList<MacCmsVod>>(null);
   const appliedRouteRootId = useRef<string | null>(null);
+  const sourceRequestKey = useRef("");
 
   const root = useMemo(() => categories.find((category) => category.id === rootId) ?? EMPTY_CATEGORY, [categories, rootId]);
   const selectedTypeId = childId || root.id;
@@ -59,8 +60,18 @@ export default function CategoriesScreen() {
     });
   }, []));
 
+  useEffect(() => {
+    sourceRequestKey.current = endpoint?.apiUrl ?? "";
+    setItems([]);
+    setPage(1);
+    setPageCount(1);
+    setLoadError(null);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [endpoint?.apiUrl]);
+
   const loadPage = useCallback(async (requestedPage: number, append = false) => {
     if (!endpoint || !selectedTypeId) return;
+    const requestSourceKey = endpoint.apiUrl;
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -70,6 +81,7 @@ export default function CategoriesScreen() {
         ? mergeMacCmsPages(await Promise.all([root, ...root.children].map((category) => fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: category.id }))))
         : await fetchVodPage(endpoint, { page: requestedPage, pageSize, typeId: selectedTypeId });
       const pageItems = result.items.slice(0, pageSize);
+      if (sourceRequestKey.current !== requestSourceKey) return;
       if (!append && pageItems.length === 0) {
         const currentRootIndex = categories.findIndex((category) => category.id === root.id);
         const nextCategory = categories.slice(Math.max(0, currentRootIndex + 1)).find((category) => category.id !== root.id);
