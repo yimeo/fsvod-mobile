@@ -155,7 +155,12 @@ export default function SettingsScreen() {
     setIsOfficialSyncing(true);
     try {
       const result = await syncOfficialResources(true);
-      setMessage(result.success ? `官方资源已检查，当前可用 ${result.state.resourceCount} 个资源站。` : "官方资源暂时无法访问，已保留现有数据源。");
+      if (result.success && !endpoint && result.resources[0]) {
+        const selected = await switchSource(result.resources[0].key);
+        setMessage(selected ? `官方资源已检查，已自动选择首个数据源。` : `官方资源已检查，当前可用 ${result.state.resourceCount} 个资源站。`);
+      } else {
+        setMessage(result.success ? `官方资源已检查，当前可用 ${result.state.resourceCount} 个资源站。` : "官方资源暂时无法访问，已保留现有数据源。");
+      }
     } finally {
       setIsOfficialSyncing(false);
     }

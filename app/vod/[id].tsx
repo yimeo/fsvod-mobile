@@ -10,6 +10,7 @@ import { useDownloadQueue } from "@/lib/download-queue-context";
 import { fetchVodDetail, type MacCmsVodDetail } from "@/lib/maccms";
 import { getOfflineDownloads, isOfflineDownloadSupported, type OfflineDownload } from "@/lib/offline-downloads";
 import { cacheVodDetail, getCachedVodDetail, getWatchHistory, saveWatchHistory } from "@/lib/vod-storage";
+import { getSourceTypeLabel } from "@/lib/source-label";
 import { useVodSource } from "@/lib/vod-context";
 
 export default function VodDetailScreen() {
@@ -72,7 +73,7 @@ export default function VodDetailScreen() {
   if (!detail) return <View style={styles.page}><ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>无法加载影片</Text><Text style={styles.errorText}>{error ?? "影片不存在或已被删除"}</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回</Text></Pressable></ScreenContainer><GlobalBottomNavigation /></View>;
 
   return <View style={styles.page}><ScreenContainer containerClassName="bg-background"><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></SourceQuickSwitcher></View></View>
+    <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption} · {getSourceTypeLabel(currentSource ?? {})}</Text></SourceQuickSwitcher></View></View>
     <VodPoster title={detail.name} url={detail.posterUrl} cacheKey={endpoint?.apiUrl ?? "global"} style={styles.heroPoster} />
     <Text style={styles.title}>{detail.name}</Text>
     <Text style={styles.metadata}>{metadata || detail.typeName || "影视"}</Text>

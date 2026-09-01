@@ -150,7 +150,7 @@ export function VodProvider({ children }: { children: ReactNode }) {
           // On a first install, the first source returned by the official
           // api.json is the default. Verify it before exposing Home, and only
           // fall back to later sources if that first source is unavailable.
-          const officialResult = await syncOfficialResources();
+          const officialResult = await syncOfficialResources(true);
           const refreshedSources = await getSources();
           setSources(refreshedSources);
           const firstOfficial = officialResult.resources[0];
