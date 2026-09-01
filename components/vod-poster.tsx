@@ -45,8 +45,8 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style
   if ((url && !fullFailed) || (useThumbnail && thumbnailUrl)) {
     return (
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
-        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" placeholder={{ blurhash: BLUR_HASH }} placeholderContentFit="cover" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoad={() => { setThumbnailLoaded(true); recordPosterCache(thumbnailUrl); }} onError={() => setThumbnailFailed(true)} /> : null}
-        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="disk" transition={260} recyclingKey={`full-${cacheKey}-${url}`} onLoad={() => { setFullLoaded(true); recordPosterCache(url); }} onError={() => setFullFailed(true)} /> : null}
+        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" placeholder={{ blurhash: BLUR_HASH }} placeholderContentFit="cover" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoad={() => { setThumbnailLoaded(true); recordPosterCache(thumbnailUrl); }} onError={() => setThumbnailFailed(true)} /> : null}
+        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoad={() => { setFullLoaded(true); recordPosterCache(url); }} onError={() => setFullFailed(true)} /> : null}
       </View>
     );
   }
