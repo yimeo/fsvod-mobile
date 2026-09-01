@@ -47,7 +47,7 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
         {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setThumbnailLoaded(true); setIsLoading(false); recordPosterCache(thumbnailUrl); }} onError={() => { setThumbnailFailed(true); setIsLoading(false); }} /> : null}
         {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setFullLoaded(true); setIsLoading(false); recordPosterCache(url); }} onError={() => { setFullFailed(true); setIsLoading(false); }} /> : null}
-        {isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><Image source={require("../assets/images/icon.png")} style={styles.loadingIcon} tintColor="#FFFFFF" contentFit="contain" /><ActivityIndicator color="#FFFFFF" size="small" /></View> : null}
+        {isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><ActivityIndicator color="#F5B64B" size="small" /></View> : null}
       </View>
     );
   }
@@ -81,6 +81,5 @@ const styles = StyleSheet.create({
   generatedTopline: { width: 28, height: 3, borderRadius: 4, backgroundColor: "#F5B64B", marginBottom: 8 },
   generatedTitle: { color: "#FFFFFF", fontSize: 17, lineHeight: 23, fontWeight: "800", letterSpacing: 0.3, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
   generatedCaption: { color: "#D8DEEA", fontSize: 10, letterSpacing: 1.5, marginTop: 9, fontWeight: "700" },
-  loadingPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#151E34" },
-  loadingIcon: { width: 38, height: 38, opacity: 0.96 },
+  loadingPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "#151E34" },
 });
