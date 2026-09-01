@@ -13,8 +13,6 @@ interface VodPosterProps {
   style?: object;
 }
 
-const BLUR_HASH = "L35E8c%L?bof00j[IUj[?bofD%j[";
-
 function generatedTone(title: string): { start: string; end: string } {
   const tones = [
     { start: "#182B50", end: "#51306B" },
@@ -42,11 +40,11 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style
     setFullLoaded(false);
   }, [thumbnailUrl, url]);
 
-  if ((url && !fullFailed) || (useThumbnail && thumbnailUrl)) {
+  if ((!url || !fullFailed) && ((url && shouldLoadFull) || (useThumbnail && thumbnailUrl))) {
     return (
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
-        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" placeholder={{ blurhash: BLUR_HASH }} placeholderContentFit="cover" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoad={() => { setThumbnailLoaded(true); recordPosterCache(thumbnailUrl); }} onError={() => setThumbnailFailed(true)} /> : null}
-        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoad={() => { setFullLoaded(true); recordPosterCache(url); }} onError={() => setFullFailed(true)} /> : null}
+        {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" placeholder={require("../assets/images/icon.png")} placeholderContentFit="contain" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoad={() => { setThumbnailLoaded(true); recordPosterCache(thumbnailUrl); }} onError={() => setThumbnailFailed(true)} /> : null}
+        {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} placeholder={require("../assets/images/icon.png")} placeholderContentFit="contain" recyclingKey={`full-${cacheKey}-${url}`} onLoad={() => { setFullLoaded(true); recordPosterCache(url); }} onError={() => setFullFailed(true)} /> : null}
       </View>
     );
   }
