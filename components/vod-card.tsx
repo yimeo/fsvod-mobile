@@ -38,9 +38,10 @@ export function VodCard({ item, onPress, compact = false }: VodCardProps) {
     requestedDetails.add(cacheKey);
     const enrich = async () => {
       try {
-        const cachedDetail = await getCachedVodDetail(item.id);
+        const sourceKey = endpoint.apiUrl;
+        const cachedDetail = await getCachedVodDetail(item.id, sourceKey);
         const detail = cachedDetail ?? await fetchVodDetail(endpoint, item.id);
-        if (!cachedDetail) await cacheVodDetail(detail);
+        if (!cachedDetail) await cacheVodDetail(detail, sourceKey);
         const poster = { posterUrl: detail.posterUrl, thumbnailUrl: detail.thumbnailUrl };
         detailPosterCache.set(cacheKey, poster);
         if (active && (poster.posterUrl || poster.thumbnailUrl)) setEnrichedPoster(poster);
@@ -56,7 +57,7 @@ export function VodCard({ item, onPress, compact = false }: VodCardProps) {
 
   const posterUrl = item.posterUrl ?? enrichedPoster?.posterUrl ?? null;
   const thumbnailUrl = item.thumbnailUrl ?? enrichedPoster?.thumbnailUrl ?? null;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${item.name}`} onPress={() => onPress(item)} style={({ pressed }) => [styles.card, compact && styles.compactCard, pressed && styles.cardPressed]}><VodPoster title={item.name} url={posterUrl} thumbnailUrl={thumbnailUrl} style={[styles.poster, compact && styles.compactPoster]} />{item.remarks ? <View style={styles.remark}><Text numberOfLines={1} style={styles.remarkText}>{item.remarks}</Text></View> : null}<Text numberOfLines={1} style={[styles.title, compact && styles.compactTitle]}>{item.name}</Text><Text numberOfLines={1} style={[styles.subtitle, compact && styles.compactSubtitle]}>{subtitle}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`查看 ${item.name}`} onPress={() => onPress(item)} style={({ pressed }) => [styles.card, compact && styles.compactCard, pressed && styles.cardPressed]}><VodPoster title={item.name} url={posterUrl} thumbnailUrl={thumbnailUrl} cacheKey={endpoint?.apiUrl ?? "global"} style={[styles.poster, compact && styles.compactPoster]} />{item.remarks ? <View style={styles.remark}><Text numberOfLines={1} style={styles.remarkText}>{item.remarks}</Text></View> : null}<Text numberOfLines={1} style={[styles.title, compact && styles.compactTitle]}>{item.name}</Text><Text numberOfLines={1} style={[styles.subtitle, compact && styles.compactSubtitle]}>{subtitle}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({

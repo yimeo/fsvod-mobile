@@ -31,10 +31,11 @@ export default function VodDetailScreen() {
       if (!id) return;
       setIsLoading(true);
       setError(null);
-      const cached = await getCachedVodDetail(id);
+      const sourceKey = endpoint?.apiUrl ?? "global";
+      const cached = await getCachedVodDetail(id, sourceKey);
       if (cached) { setDetail(cached); setIsLoading(false); }
       if (!endpoint) { if (!cached) setError("未找到数据源配置"); return; }
-      try { const fresh = await fetchVodDetail(endpoint, id); setDetail(fresh); await cacheVodDetail(fresh); }
+      try { const fresh = await fetchVodDetail(endpoint, id); setDetail(fresh); await cacheVodDetail(fresh, sourceKey); }
       catch (loadError) { if (!cached) setError(loadError instanceof Error ? loadError.message : "影片详情加载失败"); }
       finally { setIsLoading(false); }
     };
@@ -72,7 +73,7 @@ export default function VodDetailScreen() {
 
   return <View style={styles.page}><ScreenContainer containerClassName="bg-background"><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text></SourceQuickSwitcher></View></View>
-    <VodPoster title={detail.name} url={detail.posterUrl} style={styles.heroPoster} />
+    <VodPoster title={detail.name} url={detail.posterUrl} cacheKey={endpoint?.apiUrl ?? "global"} style={styles.heroPoster} />
     <Text style={styles.title}>{detail.name}</Text>
     <Text style={styles.metadata}>{metadata || detail.typeName || "影视"}</Text>
     {detail.typeName ? <View style={styles.typePill}><Text style={styles.typeText}>{detail.typeName}</Text></View> : null}

@@ -455,6 +455,7 @@ export default function PlayerScreen() {
                 <Text style={isUsingOffline ? styles.offlineBadge : styles.networkBadge}>{isUsingOffline ? "离线播放" : "网络播放"}</Text>
                 {!isUsingOffline ? <Pressable accessibilityRole="button" accessibilityLabel="选择播放倍速" onPress={() => setIsRatePickerOpen((current) => !current)} style={({ pressed }) => [styles.rateTrigger, isRatePickerOpen && styles.rateTriggerOpen, pressed && styles.pressed]}><Text style={styles.rateTriggerText}>倍速 {formatPlaybackRate(playbackRate)}×</Text></Pressable> : null}
                 <Text numberOfLines={1} ellipsizeMode="tail" style={styles.statusText}>{isUsingOffline ? "状态：已连接 · 缓冲：本地" : `状态：${playerStatus === "readyToPlay" ? (isPlaying ? "播放中" : "已暂停") : playerStatus === "error" ? "连接异常" : "加载中"} · 网速：${networkSpeed} · 缓冲：${bufferedPosition >= 0 ? `${Math.max(0, bufferedPosition).toFixed(0)} 秒` : "检测中"}`}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="切换全屏方向" onPress={() => setFullscreenOrientation((current) => current === "portrait" ? "landscape" : "portrait")} style={({ pressed }) => [styles.orientationTrigger, pressed && styles.pressed]}><Text style={styles.orientationTriggerText}>{fullscreenOrientation === "portrait" ? "全竖屏" : "全横屏"}</Text></Pressable>
               </View>
               {!isUsingOffline && isRatePickerOpen ? <View style={styles.ratePicker}>{PLAYBACK_RATES.map((rate) => <Pressable key={rate} accessibilityRole="button" accessibilityLabel={`设置 ${formatPlaybackRate(rate)} 倍速`} onPress={() => setRate(rate)} style={({ pressed }) => [styles.speedChip, playbackRate === rate && styles.speedChipActive, pressed && styles.pressed]}><Text style={[styles.speedChipText, playbackRate === rate && styles.speedChipTextActive]}>{formatPlaybackRate(rate)}×</Text></Pressable>)}</View> : null}
             </View>
@@ -560,6 +561,8 @@ const styles = StyleSheet.create({
   rateTrigger: { height: 23, paddingHorizontal: 7, justifyContent: "center", borderRadius: 6, backgroundColor: "#20293A", borderWidth: 1, borderColor: "#3A4965" },
   rateTriggerOpen: { backgroundColor: "#314C70", borderColor: "#7FB2E8" },
   rateTriggerText: { color: "#DDE9F8", fontSize: 10, lineHeight: 14, fontWeight: "900" },
+  orientationTrigger: { height: 23, paddingHorizontal: 7, justifyContent: "center", borderRadius: 6, backgroundColor: "#20293A", borderWidth: 1, borderColor: "#3A4965" },
+  orientationTriggerText: { color: "#DDE9F8", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   ratePicker: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginHorizontal: 18, marginTop: 9, padding: 10, borderRadius: 12, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#2C3B58" },
   playerTools: { flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 18, paddingTop: 11 },
   playToggle: { height: 30, minWidth: 48, paddingHorizontal: 10, justifyContent: "center", alignItems: "center", borderRadius: 8, backgroundColor: "#F5B64B" },

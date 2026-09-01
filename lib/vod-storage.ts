@@ -193,12 +193,12 @@ export async function moveSource(id: string, direction: -1 | 1): Promise<SavedMa
   return next;
 }
 
-export async function cacheVodDetail(detail: MacCmsVodDetail): Promise<void> {
-  await AsyncStorage.setItem(`${DETAIL_PREFIX}${detail.id}`, JSON.stringify({ detail, cachedAt: new Date().toISOString() }));
+export async function cacheVodDetail(detail: MacCmsVodDetail, sourceKey = "global"): Promise<void> {
+  await AsyncStorage.setItem(`${DETAIL_PREFIX}${encodeURIComponent(sourceKey)}:${detail.id}`, JSON.stringify({ detail, cachedAt: new Date().toISOString() }));
 }
 
-export async function getCachedVodDetail(id: string): Promise<MacCmsVodDetail | null> {
-  const result = await getJson<{ detail: MacCmsVodDetail } | null>(`${DETAIL_PREFIX}${id}`, null);
+export async function getCachedVodDetail(id: string, sourceKey = "global"): Promise<MacCmsVodDetail | null> {
+  const result = await getJson<{ detail: MacCmsVodDetail } | null>(`${DETAIL_PREFIX}${encodeURIComponent(sourceKey)}:${id}`, null);
   return result?.detail ?? null;
 }
 
