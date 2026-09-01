@@ -73,7 +73,7 @@ export default function VodDetailScreen() {
   if (!detail) return <View style={styles.page}><ScreenContainer className="px-6 items-center justify-center" containerClassName="bg-background"><Text style={styles.errorTitle}>无法加载影片</Text><Text style={styles.errorText}>{error ?? "影片不存在或已被删除"}</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Text style={styles.backText}>返回</Text></Pressable></ScreenContainer><GlobalBottomNavigation /></View>;
 
   return <View style={styles.page}><ScreenContainer containerClassName="bg-background"><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption} · {getSourceTypeLabel(currentSource ?? {})}</Text></SourceQuickSwitcher></View></View>
+    <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text><Text style={[styles.sourceTypeTag, getSourceTypeLabel(currentSource ?? {}) === "普通" && styles.sourceTypeTagNormal]}>{getSourceTypeLabel(currentSource ?? {})}</Text></SourceQuickSwitcher></View></View>
     <VodPoster title={detail.name} url={detail.posterUrl} cacheKey={endpoint?.apiUrl ?? "global"} style={styles.heroPoster} />
     <Text style={styles.title}>{detail.name}</Text>
     <Text style={styles.metadata}>{metadata || detail.typeName || "影视"}</Text>
@@ -96,6 +96,8 @@ const styles = StyleSheet.create({
   topBrand: { color: "#F6F7FB", fontSize: 20, lineHeight: 26, fontWeight: "900", letterSpacing: 0.1, flexShrink: 0 },
   sourceIdentity: { flexDirection: "row", alignItems: "center", gap: 7, minWidth: 0, flexShrink: 1 },
   sourceCaption: { color: "#9FAABD", fontSize: 11, lineHeight: 16, flexShrink: 1 },
+  sourceTypeTag: { color: "#B8F1E0", backgroundColor: "#1E554B", fontSize: 9, lineHeight: 14, fontWeight: "900", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  sourceTypeTagNormal: { color: "#D6DCE6", backgroundColor: "#4A5568" },
   sourceConnectionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#77869D", flexShrink: 0 },
   sourceConnectionDotHealthy: { backgroundColor: "#78D3A4" },
   sourceConnectionDotUnhealthy: { backgroundColor: "#F39A79" },
