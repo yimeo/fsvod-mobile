@@ -10,6 +10,7 @@ interface VodPosterProps {
   url: string | null;
   thumbnailUrl?: string | null;
   cacheKey?: string;
+  showLoadingSpinner?: boolean;
   style?: object;
 }
 
@@ -24,7 +25,7 @@ function generatedTone(title: string): { start: string; end: string } {
   return tones[index];
 }
 
-export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style }: VodPosterProps) {
+export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, style }: VodPosterProps) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
   const [fullFailed, setFullFailed] = useState(false);
@@ -47,7 +48,7 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", style
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
         {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setThumbnailLoaded(true); setIsLoading(false); recordPosterCache(thumbnailUrl); }} onError={() => { setThumbnailFailed(true); setIsLoading(false); }} /> : null}
         {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setFullLoaded(true); setIsLoading(false); recordPosterCache(url); }} onError={() => { setFullFailed(true); setIsLoading(false); }} /> : null}
-        {isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><ActivityIndicator color="#F5B64B" size="small" /></View> : null}
+        {showLoadingSpinner && isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><ActivityIndicator color="#F5B64B" size="small" /></View> : null}
       </View>
     );
   }
