@@ -74,7 +74,7 @@ export default function VodDetailScreen() {
 
   return <View style={styles.page}><ScreenContainer containerClassName="bg-background"><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <View style={styles.topBar}><Pressable accessibilityLabel="返回" onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><Text style={styles.backLabel}>‹</Text></Pressable><View style={styles.headerIdentity}><Text style={styles.topBrand}>飞鸿影院</Text><SourceQuickSwitcher style={styles.sourceIdentity}><View style={[styles.sourceConnectionDot, sourceConnectionTone === "healthy" && styles.sourceConnectionDotHealthy, sourceConnectionTone === "unhealthy" && styles.sourceConnectionDotUnhealthy]} /><Text numberOfLines={1} style={styles.sourceCaption}>{sourceCaption}</Text><Text style={[styles.sourceTypeTag, getSourceTypeLabel(currentSource ?? {}) === "普通" && styles.sourceTypeTagNormal]}>{getSourceTypeLabel(currentSource ?? {})}</Text></SourceQuickSwitcher></View></View>
-    <VodPoster title={detail.name} url={detail.posterUrl} cacheKey={endpoint?.apiUrl ?? "global"} showLoadingSpinner={false} style={styles.heroPoster} />
+    <VodPoster title={detail.name} url={detail.posterUrl} cacheKey={endpoint?.apiUrl ?? "global"} showLoadingSpinner={false} generatedFirst style={styles.heroPoster} />
     <Text style={styles.title}>{detail.name}</Text>
     <Text style={styles.metadata}>{metadata || detail.typeName || "影视"}</Text>
     {detail.typeName ? <View style={styles.typePill}><Text style={styles.typeText}>{detail.typeName}</Text></View> : null}

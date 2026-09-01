@@ -11,6 +11,7 @@ interface VodPosterProps {
   thumbnailUrl?: string | null;
   cacheKey?: string;
   showLoadingSpinner?: boolean;
+  generatedFirst?: boolean;
   style?: object;
 }
 
@@ -25,7 +26,7 @@ function generatedTone(title: string): { start: string; end: string } {
   return tones[index];
 }
 
-export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, style }: VodPosterProps) {
+export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, generatedFirst = false, style }: VodPosterProps) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
   const [fullFailed, setFullFailed] = useState(false);
@@ -46,6 +47,7 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showL
   if ((!url || !fullFailed) && ((url && shouldLoadFull) || (useThumbnail && thumbnailUrl))) {
     return (
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
+        {generatedFirst && !fullLoaded ? <GeneratedArtwork title={title} style={StyleSheet.absoluteFillObject} /> : null}
         {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setThumbnailLoaded(true); setIsLoading(false); recordPosterCache(thumbnailUrl); }} onError={() => { setThumbnailFailed(true); setIsLoading(false); }} /> : null}
         {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setFullLoaded(true); setIsLoading(false); recordPosterCache(url); }} onError={() => { setFullFailed(true); setIsLoading(false); }} /> : null}
         {showLoadingSpinner && isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><ActivityIndicator color="#F5B64B" size="small" /></View> : null}
@@ -53,26 +55,30 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showL
     );
   }
 
-  const tone = generatedTone(title);
   return (
-    <View style={[styles.generated, style]} accessibilityLabel={`${title} 自动生成海报`}>
-      <Svg width="100%" height="100%" viewBox="0 0 180 270" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
-        <Defs>
-          <LinearGradient id="posterGradient" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={tone.start} />
-            <Stop offset="1" stopColor={tone.end} />
-          </LinearGradient>
-        </Defs>
-        <Rect width="180" height="270" fill="url(#posterGradient)" />
-        <Circle cx="146" cy="51" r="42" fill="rgba(245,182,75,0.18)" />
-        <Circle cx="29" cy="223" r="54" fill="rgba(93,183,255,0.12)" />
-        <Rect x="15" y="18" width="3" height="235" fill="rgba(255,255,255,0.16)" />
-      </Svg>
-      <View style={styles.generatedTopline} />
-      <Text numberOfLines={3} style={styles.generatedTitle}>{title}</Text>
-      <Text style={styles.generatedCaption}>飞鸿 · 影院</Text>
-    </View>
+    <GeneratedArtwork title={title} style={style} />
   );
+}
+
+function GeneratedArtwork({ title, style }: { title: string; style?: object }) {
+  const tone = generatedTone(title);
+  return <View style={[styles.generated, style]} accessibilityLabel={`${title} 自动生成海报`}>
+    <Svg width="100%" height="100%" viewBox="0 0 180 270" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
+      <Defs>
+        <LinearGradient id="posterGradient" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={tone.start} />
+          <Stop offset="1" stopColor={tone.end} />
+        </LinearGradient>
+      </Defs>
+      <Rect width="180" height="270" fill="url(#posterGradient)" />
+      <Circle cx="146" cy="51" r="42" fill="rgba(245,182,75,0.18)" />
+      <Circle cx="29" cy="223" r="54" fill="rgba(93,183,255,0.12)" />
+      <Rect x="15" y="18" width="3" height="235" fill="rgba(255,255,255,0.16)" />
+    </Svg>
+    <View style={styles.generatedTopline} />
+    <Text numberOfLines={3} style={styles.generatedTitle}>{title}</Text>
+    <Text style={styles.generatedCaption}>飞鸿 · 影院</Text>
+  </View>;
 }
 
 const styles = StyleSheet.create({
