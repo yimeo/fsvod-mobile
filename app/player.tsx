@@ -58,6 +58,10 @@ function formatNetworkSpeed(bytesPerSecond: number): string {
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5] as const;
 
+function isHlsPlaybackUrl(url: string): boolean {
+  return /\.m3u8(?:[?#]|$)/i.test(url);
+}
+
 function formatPlaybackRate(rate: number): string {
   return Number.isInteger(rate) ? String(rate) : String(rate).replace(/0+$/, "").replace(/\.$/, "");
 }
@@ -203,6 +207,7 @@ export default function PlayerScreen() {
         safelyPause(player);
         await player.replaceAsync({
           uri: playbackUrl,
+          ...(isHlsPlaybackUrl(playbackUrl) ? { contentType: "hls" as const } : {}),
           // Android supports native caching for direct progressive and HLS playback.
           useCaching: Platform.OS === "android",
         });
@@ -245,8 +250,11 @@ export default function PlayerScreen() {
       const height = track?.size?.height ?? 0;
       if (width > 0 && height > 0) setFullscreenOrientation(height > width ? "portrait" : "landscape");
     };
+    const readCurrentTrack = () => updateOrientation(player.videoTrack ?? player.availableVideoTracks?.[0]);
     const sourceSubscription = player.addListener("sourceLoad", ({ availableVideoTracks }) => updateOrientation(availableVideoTracks?.[0]));
     const trackSubscription = player.addListener("videoTrackChange", ({ videoTrack }) => updateOrientation(videoTrack));
+    const firstRetry = setTimeout(readCurrentTrack, 350);
+    const secondRetry = setTimeout(readCurrentTrack, 1200);
     player.timeUpdateEventInterval = 5;
     const timeSubscription = player.addListener("timeUpdate", ({ currentTime, bufferedPosition: nextBufferedPosition }) => {
       if (Number.isFinite(currentTime)) {
@@ -263,6 +271,8 @@ export default function PlayerScreen() {
     return () => {
       sourceSubscription.remove();
       trackSubscription.remove();
+      clearTimeout(firstRetry);
+      clearTimeout(secondRetry);
       timeSubscription.remove();
       statusSubscription.remove();
       playingSubscription.remove();
