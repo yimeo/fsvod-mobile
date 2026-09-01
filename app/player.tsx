@@ -135,16 +135,6 @@ export default function PlayerScreen() {
   const playbackUrl = isOfflineResolved ? offlineUri ?? activeEpisodeUrl : "";
   const isUsingOffline = Boolean(offlineUri);
   const directPlayable = Boolean(playbackUrl && isDirectVideoUrl(playbackUrl));
-  const fullscreenViewRef = useRef<VideoView | null>(null);
-
-  const chooseFullscreen = useCallback(() => {
-    if (!directPlayable) return;
-    Alert.alert("选择全屏方向", "默认已根据视频实际画面自动判断，也可以手动选择。", [
-      { text: "取消", style: "cancel" },
-      { text: "横屏", onPress: () => { setFullscreenOrientation("landscape"); void fullscreenViewRef.current?.enterFullscreen(); } },
-      { text: "竖屏", onPress: () => { setFullscreenOrientation("portrait"); void fullscreenViewRef.current?.enterFullscreen(); } },
-    ]);
-  }, [directPlayable]);
 
   const persistProgress = useCallback((positionSeconds: number) => {
     if (!vodId || !activeEpisodeUrl || !Number.isFinite(positionSeconds)) return;
@@ -451,14 +441,12 @@ export default function PlayerScreen() {
                     <VideoView
                       style={styles.video}
                       player={player}
-                      ref={fullscreenViewRef}
                       nativeControls
                       fullscreenOptions={{ enable: true, orientation: fullscreenOrientation, autoExitOnRotate: false }}
                       contentFit="contain"
                       surfaceType="textureView"
                       useExoShutter
                     />
-                    <Pressable accessibilityRole="button" accessibilityLabel="全屏，选择横屏或竖屏" onPress={chooseFullscreen} style={({ pressed }) => [styles.fullscreenButton, pressed && styles.pressed]}><Text style={styles.fullscreenButtonText}>全屏</Text></Pressable>
                   </View>
                 </GestureDetector>
                 {(!isOfflineResolved || (playerStatus !== "readyToPlay" && playerStatus !== "error")) ? <View style={styles.loadingOverlay}><ActivityIndicator color="#F5B64B" size="large" /><Text style={styles.loadingTitle}>{!isOfflineResolved ? "正在准备影视…" : playerStatus === "loading" ? "正在加载影视…" : "正在连接播放源…"}</Text><Text style={styles.loadingMeta}>{isUsingOffline ? "正在读取本机缓存" : `网络速度 ${networkSpeed}`}</Text></View> : null}
@@ -467,7 +455,6 @@ export default function PlayerScreen() {
                 <Text style={isUsingOffline ? styles.offlineBadge : styles.networkBadge}>{isUsingOffline ? "离线播放" : "网络播放"}</Text>
                 {!isUsingOffline ? <Pressable accessibilityRole="button" accessibilityLabel="选择播放倍速" onPress={() => setIsRatePickerOpen((current) => !current)} style={({ pressed }) => [styles.rateTrigger, isRatePickerOpen && styles.rateTriggerOpen, pressed && styles.pressed]}><Text style={styles.rateTriggerText}>倍速 {formatPlaybackRate(playbackRate)}×</Text></Pressable> : null}
                 <Text numberOfLines={1} ellipsizeMode="tail" style={styles.statusText}>{isUsingOffline ? "状态：已连接 · 缓冲：本地" : `状态：${playerStatus === "readyToPlay" ? (isPlaying ? "播放中" : "已暂停") : playerStatus === "error" ? "连接异常" : "加载中"} · 网速：${networkSpeed} · 缓冲：${bufferedPosition >= 0 ? `${Math.max(0, bufferedPosition).toFixed(0)} 秒` : "检测中"}`}</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="切换全屏方向" onPress={() => setFullscreenOrientation((current) => current === "portrait" ? "landscape" : "portrait")} style={({ pressed }) => [styles.orientationTrigger, pressed && styles.pressed]}><Text style={styles.orientationTriggerText}>{fullscreenOrientation === "portrait" ? "全竖屏" : "全横屏"}</Text></Pressable>
               </View>
               {!isUsingOffline && isRatePickerOpen ? <View style={styles.ratePicker}>{PLAYBACK_RATES.map((rate) => <Pressable key={rate} accessibilityRole="button" accessibilityLabel={`设置 ${formatPlaybackRate(rate)} 倍速`} onPress={() => setRate(rate)} style={({ pressed }) => [styles.speedChip, playbackRate === rate && styles.speedChipActive, pressed && styles.pressed]}><Text style={[styles.speedChipText, playbackRate === rate && styles.speedChipTextActive]}>{formatPlaybackRate(rate)}×</Text></Pressable>)}</View> : null}
             </View>
@@ -563,8 +550,6 @@ const styles = StyleSheet.create({
   videoStage: { position: "relative" },
   videoTouchArea: { width: "100%", aspectRatio: 16 / 9 },
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#050812" },
-  fullscreenButton: { position: "absolute", right: 10, bottom: 10, height: 32, paddingHorizontal: 12, borderRadius: 8, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(8, 13, 25, 0.86)", borderWidth: 1, borderColor: "rgba(255,255,255,0.28)" },
-  fullscreenButtonText: { color: "#FFFFFF", fontSize: 12, lineHeight: 17, fontWeight: "900" },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5, 8, 18, 0.82)" },
   loadingTitle: { color: "#F4F6FA", fontSize: 14, lineHeight: 20, fontWeight: "800", marginTop: 10 },
   loadingMeta: { color: "#B8C5D8", fontSize: 11, lineHeight: 17, marginTop: 4 },
@@ -575,8 +560,6 @@ const styles = StyleSheet.create({
   rateTrigger: { height: 23, paddingHorizontal: 7, justifyContent: "center", borderRadius: 6, backgroundColor: "#20293A", borderWidth: 1, borderColor: "#3A4965" },
   rateTriggerOpen: { backgroundColor: "#314C70", borderColor: "#7FB2E8" },
   rateTriggerText: { color: "#DDE9F8", fontSize: 10, lineHeight: 14, fontWeight: "900" },
-  orientationTrigger: { height: 23, paddingHorizontal: 7, justifyContent: "center", borderRadius: 6, backgroundColor: "#20293A", borderWidth: 1, borderColor: "#3A4965" },
-  orientationTriggerText: { color: "#DDE9F8", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   ratePicker: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginHorizontal: 18, marginTop: 9, padding: 10, borderRadius: 12, backgroundColor: "#151E34", borderWidth: 1, borderColor: "#2C3B58" },
   playerTools: { flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 18, paddingTop: 11 },
   playToggle: { height: 30, minWidth: 48, paddingHorizontal: 10, justifyContent: "center", alignItems: "center", borderRadius: 8, backgroundColor: "#F5B64B" },
