@@ -12,6 +12,7 @@ interface VodPosterProps {
   cacheKey?: string;
   showLoadingSpinner?: boolean;
   generatedFirst?: boolean;
+  generatedTitleSize?: number;
   style?: object;
 }
 
@@ -26,7 +27,7 @@ function generatedTone(title: string): { start: string; end: string } {
   return tones[index];
 }
 
-export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, generatedFirst = false, style }: VodPosterProps) {
+export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, generatedFirst = false, generatedTitleSize = 12, style }: VodPosterProps) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
   const [fullFailed, setFullFailed] = useState(false);
@@ -47,7 +48,7 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showL
   if ((!url || !fullFailed) && ((url && shouldLoadFull) || (useThumbnail && thumbnailUrl))) {
     return (
       <View style={[styles.posterFrame, style]} accessibilityLabel={`${title} 海报`}>
-        {generatedFirst && !fullLoaded ? <GeneratedArtwork title={title} style={StyleSheet.absoluteFillObject} /> : null}
+        {generatedFirst && !fullLoaded ? <GeneratedArtwork title={title} titleSize={generatedTitleSize} style={StyleSheet.absoluteFillObject} /> : null}
         {useThumbnail && thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="high" recyclingKey={`thumb-${cacheKey}-${thumbnailUrl}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setThumbnailLoaded(true); setIsLoading(false); recordPosterCache(thumbnailUrl); }} onError={() => { setThumbnailFailed(true); setIsLoading(false); }} /> : null}
         {url && !fullFailed && shouldLoadFull ? <Image source={{ uri: url }} style={[StyleSheet.absoluteFill, useThumbnail && !fullLoaded && styles.fullImageHidden]} contentFit="cover" cachePolicy="memory-disk" priority="high" transition={120} recyclingKey={`full-${cacheKey}-${url}`} onLoadStart={() => setIsLoading(true)} onLoad={() => { setFullLoaded(true); setIsLoading(false); recordPosterCache(url); }} onError={() => { setFullFailed(true); setIsLoading(false); }} /> : null}
         {showLoadingSpinner && isLoading ? <View pointerEvents="none" style={styles.loadingPlaceholder}><ActivityIndicator color="#F5B64B" size="small" /></View> : null}
@@ -56,11 +57,11 @@ export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showL
   }
 
   return (
-    <GeneratedArtwork title={title} style={style} />
+    <GeneratedArtwork title={title} titleSize={generatedTitleSize} style={style} />
   );
 }
 
-function GeneratedArtwork({ title, style }: { title: string; style?: object }) {
+function GeneratedArtwork({ title, titleSize, style }: { title: string; titleSize: number; style?: object }) {
   const tone = generatedTone(title);
   return <View style={[styles.generated, style]} accessibilityLabel={`${title} 自动生成海报`}>
     <Svg width="100%" height="100%" viewBox="0 0 180 270" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
@@ -76,7 +77,7 @@ function GeneratedArtwork({ title, style }: { title: string; style?: object }) {
       <Rect x="15" y="18" width="3" height="235" fill="rgba(255,255,255,0.16)" />
     </Svg>
     <View style={styles.generatedTopline} />
-    <Text numberOfLines={3} style={styles.generatedTitle}>{title}</Text>
+    <Text numberOfLines={3} style={[styles.generatedTitle, { fontSize: titleSize, lineHeight: titleSize + 6 }]}>{title}</Text>
     <Text style={styles.generatedCaption}>飞鸿 · 影院</Text>
   </View>;
 }
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
   fullImageHidden: { opacity: 0 },
   generated: { overflow: "hidden", justifyContent: "flex-end", padding: 13, backgroundColor: "#202B46" },
   generatedTopline: { width: 28, height: 3, borderRadius: 4, backgroundColor: "#F5B64B", marginBottom: 8 },
-  generatedTitle: { color: "#FFFFFF", fontSize: 15, lineHeight: 21, fontWeight: "800", letterSpacing: 0.3, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
+  generatedTitle: { color: "#FFFFFF", fontWeight: "800", letterSpacing: 0.3, textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 8 },
   generatedCaption: { color: "#D8DEEA", fontSize: 10, letterSpacing: 1.5, marginTop: 9, fontWeight: "700" },
   loadingPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "#151E34" },
 });
