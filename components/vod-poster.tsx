@@ -27,7 +27,7 @@ function generatedTone(title: string): { start: string; end: string } {
   return tones[index];
 }
 
-export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, generatedFirst = false, generatedTitleSize = 12, style }: VodPosterProps) {
+export function VodPoster({ title, url, thumbnailUrl, cacheKey = "global", showLoadingSpinner = true, generatedFirst = false, generatedTitleSize = 10, style }: VodPosterProps) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
   const [fullFailed, setFullFailed] = useState(false);
