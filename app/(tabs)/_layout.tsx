@@ -39,13 +39,15 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "首页",
+          tabBarButton: (props) => <HapticTab {...props} tabKey="home" />,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="categories"
         options={{
-          title: "分类",
+          title: "影库",
+          tabBarButton: (props) => <HapticTab {...props} tabKey="library" />,
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="film.fill" color={color} />,
         }}
       />
@@ -61,6 +63,7 @@ export default function TabLayout() {
         name="search"
         options={{
           title: "搜索",
+          tabBarButton: (props) => <HapticTab {...props} tabKey="search" />,
           tabBarIcon: ({ color }) => <IconSymbol size={27} name="magnifyingglass" color={color} />,
         }}
       />
@@ -68,6 +71,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "我的",
+          tabBarButton: (props) => <HapticTab {...props} tabKey="settings" />,
           tabBarIcon: ({ color }) => <IconSymbol size={27} name="person.crop.circle.fill" color={color} />,
         }}
       />

@@ -9,6 +9,7 @@ import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, mergeMacCmsPages, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
 import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, getSourceTypeLabel, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
+import { subscribeTabRefresh } from "@/lib/tab-refresh";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
 
@@ -116,6 +117,8 @@ export default function CategoriesScreen() {
     await loadPage(1);
     setIsRefreshing(false);
   };
+
+  useEffect(() => subscribeTabRefresh("library", () => { void refresh(); }), [refresh]);
 
   const goToClassicPage = (targetPage: number) => {
     if (isLoading || targetPage < 1 || targetPage > pageCount || targetPage === page) return;

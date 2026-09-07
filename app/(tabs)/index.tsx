@@ -12,6 +12,7 @@ import { getCachedIndexAds, loadIndexAds, type IndexAd } from "@/lib/index-ad";
 import { fetchVodPage, mergeMacCmsPages, sortVodItems, type MacCmsCategory, type MacCmsVod } from "@/lib/maccms";
 import { DEFAULT_LIST_PAGE_SIZE, getSourceTypeLabel, getWatchHistory, type WatchHistoryEntry } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
+import { subscribeTabRefresh } from "@/lib/tab-refresh";
 
 const EMPTY_CATEGORY: MacCmsCategory = { id: "", name: "", parentId: null, children: [] };
 const HOME_PAGE_SIZE = DEFAULT_LIST_PAGE_SIZE;
@@ -125,6 +126,8 @@ export default function HomeScreen() {
     await Promise.all([loadPage(1), refreshCategories(), getWatchHistory().then(setHistory)]);
     setIsRefreshing(false);
   };
+
+  useEffect(() => subscribeTabRefresh("home", () => { void refresh(); }), [refresh]);
 
   const latestHistory = history[0];
   const displayItems = items;
