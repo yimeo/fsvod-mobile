@@ -49,8 +49,10 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
-    "infoPlist": {
+      "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "zh_CN",
+        "CFBundleLocalizations": ["zh-Hans", "en"],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
