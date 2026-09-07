@@ -3,6 +3,7 @@ import { OFFICIAL_RESOURCE_CONFIG_URLS } from "./official-resources";
 const AD_FORMAT = "fsvod.index-ad.v1";
 const AD_TIMEOUT_MS = 8_000;
 const MAX_AD_ITEMS = 8;
+const AD_SESSION_TTL_MS = 24 * 60 * 60 * 1_000;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -27,9 +28,14 @@ export interface IndexAdLoadResult {
 // Intentionally in-memory: it survives navigation within one APP process but
 // is cleared when the APP is fully exited and started again.
 let sessionAdResult: IndexAdLoadResult | null = null;
+let sessionAdLoadedAt = 0;
 let sessionAdRequest: Promise<IndexAdLoadResult> | null = null;
 
 export function getCachedIndexAds(): IndexAdLoadResult | null {
+  if (sessionAdResult && Date.now() - sessionAdLoadedAt >= AD_SESSION_TTL_MS) {
+    sessionAdResult = null;
+    sessionAdLoadedAt = 0;
+  }
   return sessionAdResult;
 }
 
@@ -153,7 +159,8 @@ async function findIndexAdConfig(configUrls: readonly string[]): Promise<IndexAd
  * Returns only validated ad data. Remote JavaScript is never evaluated; an endpoint ending in .js is accepted only when it returns JSON.
  */
 export async function loadIndexAds(configUrls: readonly string[] = OFFICIAL_RESOURCE_CONFIG_URLS): Promise<IndexAdLoadResult> {
-  if (sessionAdResult) return sessionAdResult;
+  const cached = getCachedIndexAds();
+  if (cached) return cached;
   if (sessionAdRequest) return sessionAdRequest;
   sessionAdRequest = (async () => {
     const config = await findIndexAdConfig(configUrls);
@@ -167,6 +174,9 @@ export async function loadIndexAds(configUrls: readonly string[] = OFFICIAL_RESO
   })();
   const result = await sessionAdRequest;
   sessionAdRequest = null;
-  if (result.ads.length > 0) sessionAdResult = result;
+  if (result.ads.length > 0) {
+    sessionAdResult = result;
+    sessionAdLoadedAt = Date.now();
+  }
   return result;
 }
