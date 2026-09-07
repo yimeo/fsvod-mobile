@@ -63,6 +63,7 @@ export default function TabLayout() {
         name="search"
         options={{
           title: "搜索",
+          tabBarButton: (props) => <HapticTab {...props} tabKey="search" />,
           tabBarIcon: ({ color }) => <IconSymbol size={27} name="magnifyingglass" color={color} />,
         }}
       />
@@ -70,6 +71,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "我的",
+          tabBarButton: (props) => <HapticTab {...props} tabKey="settings" />,
           tabBarIcon: ({ color }) => <IconSymbol size={27} name="person.crop.circle.fill" color={color} />,
         }}
       />

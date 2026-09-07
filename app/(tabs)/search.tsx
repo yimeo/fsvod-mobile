@@ -1,13 +1,14 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { VodCard } from "@/components/vod-card";
 import { fetchVodPage, type MacCmsVod } from "@/lib/maccms";
 import { DEFAULT_LIST_PAGE_SIZE, getCategoryClassicPageSize, getCategoryPageMode, getSearches, rememberSearch, removeSearch, type CategoryClassicPageSize, type CategoryPageMode } from "@/lib/vod-storage";
 import { useVodSource } from "@/lib/vod-context";
+import { subscribeTabRefresh } from "@/lib/tab-refresh";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -72,6 +73,11 @@ export default function SearchScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
     void loadPage(submittedQuery, targetPage);
   };
+
+  useEffect(() => subscribeTabRefresh("search", () => {
+    if (submittedQuery) void loadPage(submittedQuery, 1);
+    void getSearches().then((values) => setRecentSearches(values.slice(0, 10)));
+  }), [loadPage, submittedQuery]);
 
   if (!endpoint) {
     return <ScreenContainer className="px-6 pt-8" containerClassName="bg-background"><View style={styles.empty}><Text style={styles.emptyTitle}>尚未配置数据源</Text><Text style={styles.emptyText}>请先在设置中填写 MACCMS 站点域名。</Text><Pressable onPress={() => router.push("/settings" as never)} style={({ pressed }) => [styles.configButton, pressed && styles.pressed]}><Text style={styles.configText}>前往设置</Text></Pressable></View></ScreenContainer>;
