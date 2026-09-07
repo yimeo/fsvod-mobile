@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { clearVideoCacheAsync, getCurrentVideoCacheSize } from "expo-video";
 import { useRouter } from "expo-router";
@@ -33,6 +33,7 @@ export default function SettingsScreen() {
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
   const [newSourceAddress, setNewSourceAddress] = useState("");
+  const [modalMessage, setModalMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [isCheckingAll, setIsCheckingAll] = useState(false);
@@ -99,7 +100,9 @@ export default function SettingsScreen() {
   const detectAndSave = async () => {
     const address = newSourceAddress.trim();
     if (!address) { setMessage("请填写数据源地址。"); return; }
+    Keyboard.dismiss();
     setIsSaving(true);
+    setModalMessage("正在连接并识别数据源，请稍候…");
     setMessage(null);
     try {
       const displayName = newSourceName.trim() || getDefaultSourceName(address);
@@ -107,9 +110,10 @@ export default function SettingsScreen() {
       setNewSourceAddress("");
       setNewSourceName("");
       setIsAddModalVisible(false);
+      setModalMessage(null);
       setMessage(`已识别并保存“${displayName || result.inputDomain}”数据源。`);
     } catch (error) {
-      setMessage(toChineseNetworkError(error, "数据源识别失败，请检查地址后重试"));
+      setModalMessage(toChineseNetworkError(error, "数据源识别失败，请检查地址后重试"));
     } finally {
       setIsSaving(false);
     }
@@ -240,7 +244,7 @@ export default function SettingsScreen() {
         <View style={styles.profileHeader}><Image source={require("@/assets/images/icon.png")} style={styles.profileIcon} /><View style={styles.profileCopy}><Text style={styles.heading}>我的飞鸿影院</Text><SourceQuickSwitcher style={styles.profileLeadRow}><View style={[styles.profileStatusDot, activeSourceTone === "healthy" && styles.profileStatusDotHealthy, activeSourceTone === "unhealthy" && styles.profileStatusDotUnhealthy]} /><Text numberOfLines={1} style={styles.lead}>{activeSource?.displayName || "本地影视内容库"}</Text>{activeSource ? <Text style={[styles.sourceTypeTag, getSourceTypeLabel(activeSource) === "普通" && styles.sourceTypeTagNormal]}>{getSourceTypeLabel(activeSource)}</Text> : null}</SourceQuickSwitcher></View></View>
         <View style={styles.overviewList}><Pressable onPress={() => router.navigate("/history" as never)} style={({ pressed }) => [styles.overviewCard, pressed && styles.pressed]}><View style={styles.overviewIcon}><Text style={styles.overviewGlyph}>◷</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>观看记录</Text><Text style={styles.overviewText}>{cache.history ? `${cache.history} 条记录，可继续观看` : "暂无观看记录"}</Text></View><Text style={styles.overviewArrow}>›</Text></Pressable><Pressable onPress={() => router.navigate("/downloads" as never)} style={({ pressed }) => [styles.overviewCard, styles.downloadOverview, pressed && styles.pressed]}><View style={[styles.overviewIcon, styles.downloadOverviewIcon]}><Text style={[styles.overviewGlyph, styles.downloadOverviewGlyph]}>↓</Text></View><View style={styles.overviewCopy}><Text style={styles.overviewTitle}>已下载剧集</Text><Text style={styles.overviewText}>{cache.offlineCount ? `${cache.offlineCount} 集 · ${formatBytes(cache.offlineBytes)}` : "暂无已下载剧集"}</Text></View><Text style={[styles.overviewArrow, styles.downloadOverviewGlyph]}>›</Text></Pressable></View>
         <View style={styles.section}>
-          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>支持主流影视CMS资源站API</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable disabled={isCheckingAll || Boolean(checkingId) || Boolean(switchingSourceId)} onPress={() => void runCheckAll()} style={({ pressed }) => [styles.addSourceButton, (pressed || isCheckingAll) && styles.pressed]}>{isCheckingAll ? <ActivityIndicator size="small" color="#141821" /> : <Text style={styles.addSourceButtonText}>全部检测</Text>}</Pressable><Pressable disabled={isCheckingAll} onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
+          <View style={styles.sourceHeading}><View><Text style={styles.sectionTitle}>数据源管理</Text><Text style={styles.sourceIntro}>支持主流影视CMS资源站API</Text></View><View style={styles.sourceHeaderActions}><Text style={styles.sourceCount}>{sources.length} 个</Text><Pressable disabled={isCheckingAll || Boolean(checkingId) || Boolean(switchingSourceId)} onPress={() => void runCheckAll()} style={({ pressed }) => [styles.addSourceButton, (pressed || isCheckingAll) && styles.pressed]}>{isCheckingAll ? <ActivityIndicator size="small" color="#141821" /> : <Text style={styles.addSourceButtonText}>全部检测</Text>}</Pressable><Pressable disabled={isCheckingAll} onPress={() => { setNewSourceName(""); setNewSourceAddress(""); setModalMessage(null); setIsAddModalVisible(true); }} style={({ pressed }) => [styles.addSourceButton, pressed && styles.pressed]}><Text style={styles.addSourceButtonText}>＋ 添加</Text></Pressable></View></View>
           <View style={[styles.officialSyncCard, officialResourceSync.lastError && styles.officialSyncCardWarning]}><View style={styles.officialSyncCopy}><View style={styles.officialSyncTitleRow}><Text style={styles.officialSyncTitle}>官方资源</Text><Text style={styles.officialSyncTag}>自动同步</Text></View><Text style={styles.officialSyncText}>{officialResourceSync.lastError ? "官方配置暂时无法访问，已保留现有数据源" : officialResourceSync.lastCheckedAt ? `已检查 ${officialResourceSync.resourceCount} 个资源站 · ${new Date(officialResourceSync.lastCheckedAt).toLocaleString("zh-CN")}` : "启动后会自动检查官方资源站更新"}</Text></View><Pressable disabled={isOfficialSyncing} onPress={() => void runOfficialSync()} style={({ pressed }) => [styles.officialSyncButton, (pressed || isOfficialSyncing) && styles.pressed]}>{isOfficialSyncing ? <ActivityIndicator size="small" color="#141821" /> : <Text style={styles.officialSyncButtonText}>检查更新</Text>}</Pressable></View>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
@@ -292,7 +296,7 @@ export default function SettingsScreen() {
         <View style={styles.versionFooter}><Text style={styles.versionText}>fsvod-mobile-1.3.4</Text></View>
       </ScrollView>
       <Modal visible={isAddModalVisible} transparent animationType="fade" onRequestClose={() => setIsAddModalVisible(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeading}><View><Text style={styles.modalTitle}>添加资源</Text><Text style={styles.modalSubtitle}>{isSaving ? "正在连接并识别数据源，请稍候…" : "名称和地址都可以随时编辑"}</Text></View><Pressable disabled={isSaving} onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.modalCloseText}>×</Text></Pressable></View><Text style={styles.label}>数据源名称</Text><TextInput editable={!isSaving} value={newSourceName} onChangeText={setNewSourceName} autoCorrect={false} returnKeyType="next" placeholder="可选，例如：主线路" placeholderTextColor="#71809B" style={styles.input} /><Text style={styles.fieldHint}>留空时自动使用域名，例如 example.com。</Text><Text style={[styles.label, styles.addressLabel]}>数据源地址</Text><TextInput editable={!isSaving} value={newSourceAddress} onChangeText={setNewSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} /><View style={styles.modalActions}><Pressable disabled={isSaving} onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalCancel, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.modalCancelText}>取消</Text></Pressable><Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.modalConfirm, (pressed || isSaving) && styles.pressed]}>{isSaving ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#10182B" size="small" /><Text style={styles.modalConfirmText}>正在识别…</Text></View> : <Text style={styles.modalConfirmText}>添加并识别</Text>}</Pressable></View></View></View>
+        <View style={styles.modalBackdrop}><View style={styles.modalCard}><View style={styles.modalHeading}><View><Text style={styles.modalTitle}>添加资源</Text><Text style={styles.modalSubtitle}>{isSaving ? "正在连接并识别数据源，请稍候…" : "名称和地址都可以随时编辑"}</Text>{modalMessage ? <Text style={[styles.modalMessage, modalMessage.startsWith("正在") && styles.modalMessagePending]}>{modalMessage}</Text> : null}</View><Pressable disabled={isSaving} onPress={() => setIsAddModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.modalCloseText}>×</Text></Pressable></View><Text style={styles.label}>数据源名称</Text><TextInput editable={!isSaving} value={newSourceName} onChangeText={setNewSourceName} autoCorrect={false} returnKeyType="next" placeholder="可选，例如：主线路" placeholderTextColor="#71809B" style={styles.input} /><Text style={styles.fieldHint}>留空时自动使用域名，例如 example.com。</Text><Text style={[styles.label, styles.addressLabel]}>数据源地址</Text><TextInput editable={!isSaving} value={newSourceAddress} onChangeText={setNewSourceAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void detectAndSave()} placeholder="例如：https://example.com" placeholderTextColor="#71809B" style={styles.input} /><View style={styles.modalActions}><Pressable disabled={isSaving} onPress={() => { setModalMessage(null); setIsAddModalVisible(false); }} style={({ pressed }) => [styles.modalCancel, pressed && styles.pressed, isSaving && styles.disabled]}><Text style={styles.modalCancelText}>取消</Text></Pressable><Pressable disabled={isSaving} onPress={() => void detectAndSave()} style={({ pressed }) => [styles.modalConfirm, (pressed || isSaving) && styles.pressed]}>{isSaving ? <View style={styles.clearingButtonContent}><ActivityIndicator color="#10182B" size="small" /><Text style={styles.modalConfirmText}>正在识别…</Text></View> : <Text style={styles.modalConfirmText}>添加并识别</Text>}</Pressable></View></View></View>
       </Modal>
     </ScreenContainer>
   );
@@ -453,6 +457,8 @@ const styles = StyleSheet.create({
   modalHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 19 },
   modalTitle: { color: "#F5F7FB", fontSize: 20, lineHeight: 27, fontWeight: "900" },
   modalSubtitle: { color: "#93A0B4", fontSize: 11, lineHeight: 16, marginTop: 2 },
+  modalMessage: { color: "#F2A17F", fontSize: 11, lineHeight: 16, marginTop: 7 },
+  modalMessagePending: { color: "#F5C66E" },
   modalClose: { width: 30, height: 30, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#222C40" },
   modalCloseText: { color: "#C8D3E2", fontSize: 23, lineHeight: 25, fontWeight: "500" },
   fieldHint: { color: "#8795AB", fontSize: 10, lineHeight: 15, marginTop: 5 },
