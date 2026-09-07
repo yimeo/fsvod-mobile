@@ -15,7 +15,7 @@ export function HapticTab(props: BottomTabBarButtonProps & { tabKey?: RefreshTab
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
         const now = Date.now();
-        if (props.tabKey && now - lastPressAt.current < 350) emitTabRefresh(props.tabKey);
+        if (props.tabKey && props.accessibilityState?.selected && now - lastPressAt.current < 350) emitTabRefresh(props.tabKey);
         lastPressAt.current = now;
         props.onPressIn?.(ev);
       }}

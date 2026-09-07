@@ -13,7 +13,6 @@ import { clearOfflineDownloads, getOfflineSummary, getVideoCacheSummary } from "
 import { useVodSource } from "@/lib/vod-context";
 import { clearCompletedQueueTasks } from "@/lib/download-queue";
 import { toChineseNetworkError } from "@/lib/network-error";
-import { subscribeTabRefresh } from "@/lib/tab-refresh";
 
 interface CacheSummary { playbackLists: number; searches: number; history: number; posterCount: number; posterBytes: number; videoBytes: number; offlineCount: number; offlineBytes: number }
 
@@ -80,12 +79,6 @@ export default function SettingsScreen() {
     void loadCacheSummary();
     return subscribePosterCacheChanges(() => { void loadCacheSummary(); });
   }, [loadCacheSummary]));
-
-  useEffect(() => subscribeTabRefresh("settings", () => {
-    void loadCacheSummary();
-    setMessage("正在刷新我的页面…");
-    void syncOfficialResources(true).then(() => setMessage("我的页面已刷新。"));
-  }), [loadCacheSummary, syncOfficialResources]);
 
   useEffect(() => {
     void Promise.all([getCategoryPageMode(), getCategoryClassicPageSize()]).then(([mode, size]) => {
