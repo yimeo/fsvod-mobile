@@ -207,7 +207,11 @@ export function VodProvider({ children }: { children: ReactNode }) {
 
   const configureSource = useCallback(async (address: string, displayName?: string) => {
     const catalog = await discoverMacCms(address);
-    const nextCategories = await filterCategoriesWithContent(catalog.endpoint, catalog.categories);
+    // The initial MACCMS response is already a valid connection check. Some
+    // providers reject or mishandle extra per-category probes, so retain the
+    // discovered tree when filtering cannot find a child with content.
+    const filteredCategories = await filterCategoriesWithContent(catalog.endpoint, catalog.categories);
+    const nextCategories = filteredCategories.length > 0 ? filteredCategories : catalog.categories;
     if (nextCategories.length === 0) throw new Error("该数据源没有可浏览的分类数据");
     await saveEndpoint(catalog.endpoint);
     setSources(await upsertSource(catalog.endpoint, "healthy", null, displayName));
@@ -288,7 +292,8 @@ export function VodProvider({ children }: { children: ReactNode }) {
 
   const updateSavedSource = useCallback(async (id: string, address: string, displayName: string) => {
     const catalog = await discoverMacCms(address);
-    const nextCategories = await filterCategoriesWithContent(catalog.endpoint, catalog.categories);
+    const filteredCategories = await filterCategoriesWithContent(catalog.endpoint, catalog.categories);
+    const nextCategories = filteredCategories.length > 0 ? filteredCategories : catalog.categories;
     if (nextCategories.length === 0) throw new Error("该数据源没有可浏览的分类数据");
     const wasActive = endpoint?.apiUrl === id;
     setSources(await replaceSource(id, catalog.endpoint, displayName));

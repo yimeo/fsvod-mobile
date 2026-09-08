@@ -7,7 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { SourceQuickSwitcher } from "@/components/source-quick-switcher";
-import { DEFAULT_LIST_PAGE_SIZE, clearPlaybackLists, clearSearches, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, getSourceTypeLabel, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
+import { DEFAULT_LIST_PAGE_SIZE, clearPlaybackLists, clearSearches, clearWatchHistory, getCategoryClassicPageSize, getCategoryPageMode, getLocalCacheSummary, getSources, getSourceTypeLabel, saveCategoryClassicPageSize, saveCategoryPageMode, type CategoryClassicPageSize, type CategoryPageMode, type SavedMacCmsSource } from "@/lib/vod-storage";
 import { clearPosterCache, getPosterCacheSummary, subscribePosterCacheChanges } from "@/lib/poster-cache";
 import { clearOfflineDownloads, getOfflineSummary, getVideoCacheSummary } from "@/lib/offline-downloads";
 import { useVodSource } from "@/lib/vod-context";
@@ -169,7 +169,11 @@ export default function SettingsScreen() {
     try {
       const result = await syncOfficialResources(true);
       if (result.success && !endpoint && result.resources[0]) {
-        const selected = await switchSource(result.resources[0].key);
+        const refreshedSources = await getSources();
+        const firstSource = refreshedSources.find((source) => source.endpoint.apiUrl === result.resources[0].address);
+        // Source ids are API URLs; the official key is only metadata used to
+        // reconcile the catalog during sync.
+        const selected = firstSource ? await switchSource(firstSource.id) : false;
         setMessage(selected ? `官方资源已检查，已自动选择首个数据源。` : `官方资源已检查，当前可用 ${result.state.resourceCount} 个资源站。`);
       } else {
         setMessage(result.success ? `官方资源已检查，当前可用 ${result.state.resourceCount} 个资源站。` : "官方资源暂时无法访问，已保留现有数据源。");
