@@ -108,7 +108,13 @@ function buildCandidateUrls(input: string): string[] {
   const direct = url.pathname.includes("provide/vod")
     ? `${url.origin}${url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`}`
     : "";
-  const candidates = direct ? [direct] : API_SUFFIXES.map((suffix) => `${url.origin}${suffix}`);
+  const httpsCandidates = direct ? [direct] : API_SUFFIXES.map((suffix) => `${url.origin}${suffix}`);
+  // Some older CMS sites serve an invalid/untrusted HTTPS certificate while
+  // their HTTP API remains available. Try HTTPS first, then HTTP.
+  const candidates = [...httpsCandidates];
+  if (url.protocol === "https:") {
+    candidates.push(...httpsCandidates.map((candidate) => candidate.replace(/^https:/i, "http:")));
+  }
   return [...new Set(candidates)];
 }
 

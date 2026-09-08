@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCategoryTree, filterCategoriesWithContent, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, sortVodItems } from "../lib/maccms";
+import { buildCategoryTree, discoverMacCms, filterCategoriesWithContent, mergeMacCmsPages, parseMacCmsPage, parsePlaySources, sortVodItems } from "../lib/maccms";
 
 describe("MACCMS 数据适配", () => {
   const endpoint = "https://video.example.com/api.php/provide/vod/";
@@ -53,6 +53,27 @@ describe("MACCMS 数据适配", () => {
       "https://video.example.com/uploads/three.jpg",
       "https://video.example.com/images/four.jpg",
     ]);
+  });
+
+  it("HTTPS 证书不可用时回退到 HTTP API", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.startsWith("https://source.example.com/")) throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({
+        code: 1,
+        class: [{ type_id: 1, type_name: "电影", type_pid: 0 }],
+        list: [{ vod_id: 1, vod_name: "HTTP 回退影片", type_id: 1, type_name: "电影" }],
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const catalog = await discoverMacCms("https://source.example.com");
+      expect(catalog.endpoint.apiUrl).toBe("http://source.example.com/api.php/provide/vod/");
+      expect(catalog.initialPage.items[0]?.name).toBe("HTTP 回退影片");
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   it("将父子分类组织为树形结构", () => {
