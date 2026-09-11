@@ -15,7 +15,7 @@ export function GlobalBottomNavigation() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const selectedHref = pathname.startsWith("/vod/") || pathname === "/player" ? "/" : pathname;
+  const selectedHref = pathname.startsWith("/vod/") || pathname === "/player" ? "/categories" : pathname;
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 9), height: 56 + Math.max(insets.bottom, 9) }]}>
